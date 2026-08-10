@@ -165,6 +165,43 @@ func _close_overlay() -> void:
 		overlay_layer = null
 	_refresh_all()
 
+## Stacks a small yes/no confirmation on top of whatever panel is currently
+## open (e.g. the trade panel), without closing it. on_confirm only runs if
+## the player accepts; cancelling or dismissing just removes the popup.
+func _show_confirm(text: String, on_confirm: Callable) -> void:
+	if overlay_layer == null:
+		return
+
+	var dim := ColorRect.new()
+	dim.color = Color(0, 0, 0, 0.55)
+	dim.set_anchors_preset(Control.PRESET_FULL_RECT)
+	overlay_layer.add_child(dim)
+
+	var center := CenterContainer.new()
+	center.set_anchors_preset(Control.PRESET_FULL_RECT)
+	dim.add_child(center)
+
+	var panel := UIUtil.make_panel()
+	center.add_child(panel)
+
+	var vbox := VBoxContainer.new()
+	vbox.custom_minimum_size = Vector2(380, 0)
+	vbox.add_theme_constant_override("separation", 12)
+	panel.add_child(vbox)
+
+	vbox.add_child(UIUtil.make_label(text, 18))
+
+	var btn_confirm := UIUtil.make_button(tr("confirm"))
+	btn_confirm.pressed.connect(func():
+		dim.queue_free()
+		on_confirm.call()
+	)
+	vbox.add_child(btn_confirm)
+
+	var btn_cancel := UIUtil.make_button(tr("cancel"))
+	btn_cancel.pressed.connect(func(): dim.queue_free())
+	vbox.add_child(btn_cancel)
+
 ## --- Travel confirm ---
 
 func _open_travel_confirm(port_id: String) -> void:
@@ -274,10 +311,15 @@ func _open_trade_panel() -> void:
 		)
 		btn_buy_max.pressed.connect(func():
 			var max_buy := GameState.get_max_affordable(good.id)
-			if max_buy > 0 and GameState.buy(good.id, max_buy):
-				amount.value = max_buy
-				refresh_row.call()
-				refresh_status.call()
+			if max_buy <= 0:
+				return
+			var cost := GameState.get_price(GameState.current_port_id, good.id) * max_buy
+			_show_confirm(tr("confirm_buy_max") % [max_buy, tr(good.name_key), cost], func():
+				if GameState.buy(good.id, max_buy):
+					amount.value = max_buy
+					refresh_row.call()
+					refresh_status.call()
+			)
 		)
 		btn_sell.pressed.connect(func():
 			if GameState.sell(good.id, int(amount.value)):
@@ -286,10 +328,15 @@ func _open_trade_panel() -> void:
 		)
 		btn_sell_all.pressed.connect(func():
 			var owned: int = GameState.cargo.get(good.id, 0)
-			if owned > 0 and GameState.sell(good.id, owned):
-				amount.value = 1
-				refresh_row.call()
-				refresh_status.call()
+			if owned <= 0:
+				return
+			var revenue := GameState.get_price(GameState.current_port_id, good.id) * owned
+			_show_confirm(tr("confirm_sell_all") % [owned, tr(good.name_key), revenue], func():
+				if GameState.sell(good.id, owned):
+					amount.value = 1
+					refresh_row.call()
+					refresh_status.call()
+			)
 		)
 
 	var btn_close := UIUtil.make_button(tr("close"))

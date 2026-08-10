@@ -26,6 +26,8 @@ func _test_game_overlays() -> void:
 	await process_frame
 
 	instance.call("_open_trade_panel")
+	instance.call("_show_confirm", "test confirm", func(): pass)
+	print("confirm dialog stacked OK")
 	instance.call("_close_overlay")
 	print("trade panel OK")
 
