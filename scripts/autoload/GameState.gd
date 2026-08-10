@@ -177,6 +177,15 @@ func is_overloaded() -> bool:
 func get_overload_ratio() -> float:
 	return clamp(float(get_cargo_used() - ship_capacity) / ship_capacity, 0.0, OVERLOAD_ALLOWANCE - 1.0) / (OVERLOAD_ALLOWANCE - 1.0)
 
+## How many units of good_id can be bought right now, limited by both gold and remaining hold space.
+func get_max_affordable(good_id: String) -> int:
+	var price := get_price(current_port_id, good_id)
+	if price <= 0:
+		return 0
+	var by_gold := int(gold / float(price))
+	var by_space := get_overload_capacity() - get_cargo_used()
+	return max(0, min(by_gold, by_space))
+
 func can_buy(good_id: String, qty: int) -> bool:
 	if qty <= 0:
 		return false

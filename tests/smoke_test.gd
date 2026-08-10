@@ -23,6 +23,16 @@ func _initialize() -> void:
 	assert(GameState.cargo.get("wheat", 0) == 0)
 	print("buy/sell OK")
 
+	# Max-affordable helper backing the "buy max" UI button
+	GameState.gold = 100
+	var wheat_price: int = GameState.get_price(GameState.current_port_id, "wheat")
+	var expected_max: int = min(int(100 / float(wheat_price)), GameState.get_overload_capacity())
+	assert(GameState.get_max_affordable("wheat") == expected_max)
+	assert(GameState.buy("wheat", GameState.get_max_affordable("wheat")))
+	assert(not GameState.can_buy("wheat", GameState.get_max_affordable("wheat") + 1))
+	GameState.gold = 100
+	print("max-affordable OK")
+
 	# Upgrades
 	GameState.gold = 5000
 	assert(GameState.buy_upgrade("cargo1"))

@@ -30,6 +30,8 @@ travel_confirm,הפלג,Set Sail
 trade_title,מסחר ב-%s,Trade at %s
 trade_buy,קנה,Buy
 trade_sell,מכור,Sell
+trade_max,מקס׳,Max
+trade_all,הכל,All
 trade_price,מחיר,Price
 trade_owned,ברשותך,Owned
 trade_overload_warning,⚠ עומס יתר! סיכון לאובדן מטען או נזק לספינה בדרך,⚠ Overloaded! Risk of losing cargo or ship damage en route
@@ -41,6 +43,10 @@ bank_deposit,הפקד,Deposit
 bank_withdraw,משוך,Withdraw
 bank_borrow,לווה,Borrow
 bank_repay,החזר הלוואה,Repay Loan
+bank_deposit_all,הפקד הכל,Deposit All
+bank_withdraw_all,משוך הכל,Withdraw All
+bank_borrow_max,לווה מקס׳,Borrow Max
+bank_repay_all,החזר הכל,Repay All
 shipyard_title,המספנה,The Shipyard
 shipyard_buy,קנה (%d),Buy (%d)
 shipyard_owned,ברשותך,Owned

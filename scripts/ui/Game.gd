@@ -196,7 +196,7 @@ func _open_travel_confirm(port_id: String) -> void:
 func _open_trade_panel() -> void:
 	var panel := _open_overlay()
 	var vbox := VBoxContainer.new()
-	vbox.custom_minimum_size = Vector2(520, 0)
+	vbox.custom_minimum_size = Vector2(760, 0)
 	vbox.add_theme_constant_override("separation", 10)
 	panel.add_child(vbox)
 
@@ -242,14 +242,28 @@ func _open_trade_panel() -> void:
 		btn_buy.custom_minimum_size = Vector2(70, 44)
 		row.add_child(btn_buy)
 
+		var btn_buy_max := UIUtil.make_button(tr("trade_max"), 44, 16)
+		btn_buy_max.custom_minimum_size = Vector2(60, 44)
+		row.add_child(btn_buy_max)
+
 		var btn_sell := UIUtil.make_button(tr("trade_sell"), 44, 16)
 		btn_sell.custom_minimum_size = Vector2(70, 44)
 		row.add_child(btn_sell)
 
+		var btn_sell_all := UIUtil.make_button(tr("trade_all"), 44, 16)
+		btn_sell_all.custom_minimum_size = Vector2(60, 44)
+		row.add_child(btn_sell_all)
+
 		var refresh_row := func():
 			var price := GameState.get_price(GameState.current_port_id, good.id)
 			price_label.text = "%s: %d" % [tr("trade_price"), price]
-			owned_label.text = "%s: %d" % [tr("trade_owned"), GameState.cargo.get(good.id, 0)]
+			var owned: int = GameState.cargo.get(good.id, 0)
+			owned_label.text = "%s: %d" % [tr("trade_owned"), owned]
+			var max_buy := GameState.get_max_affordable(good.id)
+			btn_buy.disabled = max_buy <= 0
+			btn_buy_max.disabled = max_buy <= 0
+			btn_sell.disabled = owned <= 0
+			btn_sell_all.disabled = owned <= 0
 
 		refresh_row.call()
 
@@ -258,8 +272,22 @@ func _open_trade_panel() -> void:
 				refresh_row.call()
 				refresh_status.call()
 		)
+		btn_buy_max.pressed.connect(func():
+			var max_buy := GameState.get_max_affordable(good.id)
+			if max_buy > 0 and GameState.buy(good.id, max_buy):
+				amount.value = max_buy
+				refresh_row.call()
+				refresh_status.call()
+		)
 		btn_sell.pressed.connect(func():
 			if GameState.sell(good.id, int(amount.value)):
+				refresh_row.call()
+				refresh_status.call()
+		)
+		btn_sell_all.pressed.connect(func():
+			var owned: int = GameState.cargo.get(good.id, 0)
+			if owned > 0 and GameState.sell(good.id, owned):
+				amount.value = 1
 				refresh_row.call()
 				refresh_status.call()
 		)
@@ -273,7 +301,7 @@ func _open_trade_panel() -> void:
 func _open_bank_panel() -> void:
 	var panel := _open_overlay()
 	var vbox := VBoxContainer.new()
-	vbox.custom_minimum_size = Vector2(420, 0)
+	vbox.custom_minimum_size = Vector2(480, 0)
 	vbox.add_theme_constant_override("separation", 12)
 	panel.add_child(vbox)
 
@@ -288,16 +316,6 @@ func _open_bank_panel() -> void:
 	amount.step = 1
 	vbox.add_child(amount)
 
-	var refresh_info := func():
-		info_label.text = "%s: %d\n%s: %d\n%s: %d\n%s: %d" % [
-			tr("hud_gold"), GameState.gold,
-			tr("bank_savings"), int(GameState.savings),
-			tr("bank_loan"), int(GameState.loan),
-			tr("bank_max_loan"), GameState.bank_max_loan(),
-		]
-
-	refresh_info.call()
-
 	var grid := GridContainer.new()
 	grid.columns = 2
 	grid.add_theme_constant_override("h_separation", 10)
@@ -305,32 +323,76 @@ func _open_bank_panel() -> void:
 	vbox.add_child(grid)
 
 	var btn_deposit := UIUtil.make_button(tr("bank_deposit"))
+	grid.add_child(btn_deposit)
+	var btn_deposit_max := UIUtil.make_button(tr("bank_deposit_all"))
+	grid.add_child(btn_deposit_max)
+
+	var btn_withdraw := UIUtil.make_button(tr("bank_withdraw"))
+	grid.add_child(btn_withdraw)
+	var btn_withdraw_max := UIUtil.make_button(tr("bank_withdraw_all"))
+	grid.add_child(btn_withdraw_max)
+
+	var btn_borrow := UIUtil.make_button(tr("bank_borrow"))
+	grid.add_child(btn_borrow)
+	var btn_borrow_max := UIUtil.make_button(tr("bank_borrow_max"))
+	grid.add_child(btn_borrow_max)
+
+	var btn_repay := UIUtil.make_button(tr("bank_repay"))
+	grid.add_child(btn_repay)
+	var btn_repay_max := UIUtil.make_button(tr("bank_repay_all"))
+	grid.add_child(btn_repay_max)
+
+	var refresh_info := func():
+		info_label.text = "%s: %d\n%s: %d\n%s: %d\n%s: %d" % [
+			tr("hud_gold"), GameState.gold,
+			tr("bank_savings"), int(GameState.savings),
+			tr("bank_loan"), int(GameState.loan),
+			tr("bank_max_loan"), GameState.bank_max_loan(),
+		]
+		btn_deposit.disabled = GameState.gold <= 0
+		btn_deposit_max.disabled = GameState.gold <= 0
+		btn_withdraw.disabled = GameState.savings <= 0
+		btn_withdraw_max.disabled = GameState.savings <= 0
+		btn_borrow.disabled = GameState.bank_max_loan() <= 0
+		btn_borrow_max.disabled = GameState.bank_max_loan() <= 0
+		var can_repay := GameState.loan > 0 and GameState.gold > 0
+		btn_repay.disabled = not can_repay
+		btn_repay_max.disabled = not can_repay
+
+	refresh_info.call()
+
 	btn_deposit.pressed.connect(func():
 		GameState.bank_deposit(int(amount.value))
 		refresh_info.call()
 	)
-	grid.add_child(btn_deposit)
-
-	var btn_withdraw := UIUtil.make_button(tr("bank_withdraw"))
+	btn_deposit_max.pressed.connect(func():
+		GameState.bank_deposit(GameState.gold)
+		refresh_info.call()
+	)
 	btn_withdraw.pressed.connect(func():
 		GameState.bank_withdraw(int(amount.value))
 		refresh_info.call()
 	)
-	grid.add_child(btn_withdraw)
-
-	var btn_borrow := UIUtil.make_button(tr("bank_borrow"))
+	btn_withdraw_max.pressed.connect(func():
+		GameState.bank_withdraw(int(GameState.savings))
+		refresh_info.call()
+	)
 	btn_borrow.pressed.connect(func():
 		GameState.bank_borrow(int(amount.value))
 		refresh_info.call()
 	)
-	grid.add_child(btn_borrow)
-
-	var btn_repay := UIUtil.make_button(tr("bank_repay"))
+	btn_borrow_max.pressed.connect(func():
+		GameState.bank_borrow(GameState.bank_max_loan())
+		refresh_info.call()
+	)
 	btn_repay.pressed.connect(func():
 		GameState.bank_repay(int(amount.value))
 		refresh_info.call()
 	)
-	grid.add_child(btn_repay)
+	btn_repay_max.pressed.connect(func():
+		GameState.bank_repay(min(GameState.gold, int(ceil(GameState.loan))))
+		refresh_info.call()
+	)
 
 	var btn_close := UIUtil.make_button(tr("close"))
 	btn_close.pressed.connect(_close_overlay)
