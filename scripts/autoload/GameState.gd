@@ -10,7 +10,6 @@ const STARTING_GOLD := 500
 const STARTING_CAPACITY := 50
 const STARTING_SPEED_POINTS := 0
 const STARTING_DEFENSE_POINTS := 0
-const BASE_TRAVEL_DIVISOR := 150.0
 const MAX_LOAN_FACTOR := 2.0 # can borrow up to 2x current net worth
 const DAILY_INTEREST := 0.02
 const OVERLOAD_ALLOWANCE := 1.5 # can risk-load up to 150% of nominal capacity
@@ -43,7 +42,12 @@ var prices: Dictionary = {} # port_id -> { good_id -> int price }
 
 var is_traveling: bool = false
 var travel_destination_id: String = ""
-var travel_days_remaining: int = 0
+var travel_half_days_remaining: int = 0
+## Half-a-day legs (any Limassol connection except Limassol<->Venice) don't
+## trigger a full day-tick (price update/interest/event roll) on their own;
+## this banks the odd half-day so two short hops in a row still add up to a
+## real day instead of time silently vanishing.
+var half_day_carry: int = 0
 var travel_log: Array = []
 var pending_encounter: Dictionary = {}
 
@@ -129,7 +133,8 @@ func new_game(game_length: int = 21, start_port_id: String = "jaffa") -> void:
 	savings = 0.0
 	is_traveling = false
 	travel_destination_id = ""
-	travel_days_remaining = 0
+	travel_half_days_remaining = 0
+	half_day_carry = 0
 	travel_log.clear()
 	pending_encounter.clear()
 	_init_prices()
@@ -298,15 +303,18 @@ func _apply_daily_interest() -> void:
 
 ## --- Time & travel ---
 
-func get_travel_days(from_id: String, to_id: String) -> int:
-	var from_port := get_port(from_id)
-	var to_port := get_port(to_id)
-	if from_port == null or to_port == null:
-		return 1
-	var dist: float = from_port.map_position.distance_to(to_port.map_position)
-	var speed_factor := 1.0 + 0.25 * ship_speed_points
-	var days := ceili(dist / (BASE_TRAVEL_DIVISOR * speed_factor))
-	return max(1, days)
+## Fixed travel durations in half-day units (so Limassol's short in-between
+## hops can be modeled precisely): a "regular" direct leg is a full day (2),
+## a "far" leg to/from Piraeus/Venice is two days (4), and any leg touching
+## Limassol is just half a day (1) -- except Limassol<->Venice, which is a
+## full day (2) like a regular leg despite Venice being a far port.
+func get_travel_half_days(from_id: String, to_id: String) -> int:
+	if from_id == "limassol" or to_id == "limassol":
+		var other := to_id if from_id == "limassol" else from_id
+		return 2 if other == "venice" else 1
+	if FAR_PORTS.has(from_id) or FAR_PORTS.has(to_id):
+		return 4
+	return 2
 
 ## Direct travel is disallowed between a far port (Piraeus/Venice) and
 ## anything other than a hub port (Limassol/Istanbul/Alexandria) — including
@@ -326,20 +334,24 @@ func start_travel(destination_id: String) -> void:
 		return
 	is_traveling = true
 	travel_destination_id = destination_id
-	travel_days_remaining = get_travel_days(current_port_id, destination_id)
+	travel_half_days_remaining = get_travel_half_days(current_port_id, destination_id)
 	travel_log.clear()
 	_advance_travel()
 
 func _advance_travel() -> void:
-	while is_traveling and travel_days_remaining > 0 and pending_encounter.is_empty():
+	while is_traveling and travel_half_days_remaining > 0 and pending_encounter.is_empty():
+		travel_half_days_remaining -= 1
+		half_day_carry += 1
+		if half_day_carry < 2:
+			continue # short Limassol hop: half a day passed, no day-tick yet
+		half_day_carry = 0
 		_advance_day()
-		travel_days_remaining -= 1
 		if current_day > game_length_days:
 			return # _advance_day already triggered game_ended
 		_roll_travel_event()
 		if not pending_encounter.is_empty():
 			return
-	if is_traveling and travel_days_remaining <= 0:
+	if is_traveling and travel_half_days_remaining <= 0:
 		current_port_id = travel_destination_id
 		is_traveling = false
 		arrived_at_port.emit(current_port_id, travel_log.duplicate())
@@ -380,7 +392,7 @@ func _trigger_event(ev: EventDef) -> void:
 		EventDef.Kind.PIRATES:
 			_start_pirate_encounter()
 		EventDef.Kind.FAIR_WIND:
-			travel_days_remaining = max(0, travel_days_remaining - 1)
+			travel_half_days_remaining = max(0, travel_half_days_remaining - 2)
 			travel_log.append({"type": "fair_wind"})
 		EventDef.Kind.MARKET_DEMAND:
 			travel_log.append({"type": "market_demand"})

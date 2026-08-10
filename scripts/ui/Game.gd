@@ -297,10 +297,15 @@ func _open_travel_confirm(port_id: String) -> void:
 	panel.add_child(vbox)
 
 	var dest := GameState.get_port(port_id)
-	var days := GameState.get_travel_days(GameState.current_port_id, port_id)
+	var half_days := GameState.get_travel_half_days(GameState.current_port_id, port_id)
+	var days_label := tr("travel_half_day")
+	if half_days == 2:
+		days_label = tr("travel_one_day")
+	elif half_days >= 4:
+		days_label = tr("travel_two_days")
 
 	vbox.add_child(UIUtil.make_title(tr(dest.name_key), 26))
-	vbox.add_child(UIUtil.make_label(tr("travel_estimate") % days, 18))
+	vbox.add_child(UIUtil.make_label(tr("travel_estimate") % days_label, 18))
 
 	var btn_go := UIUtil.make_button(tr("travel_confirm"))
 	btn_go.pressed.connect(func():

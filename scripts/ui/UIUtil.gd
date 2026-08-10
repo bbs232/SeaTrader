@@ -67,7 +67,7 @@ const _RULES_HE := """מטרת המשחק
 "קנה"/"מכור" פועלים על הכמות שנבחרה. "מקס׳" קונה את המקסימום האפשרי לפי הזהב הפנוי ומקום בספינה. "הכל" מוכר את כל הכמות המוחזקת. קנייה מרבית או מכירה מלאה תמיד מציגות חלון אישור מראש, ואם הקנייה תגרום לעומס יתר — האזהרה על כך מופיעה בתוך אותו חלון אישור, לפני ביצוע הרכישה.
 
 נסיעה וזמן
-משך ההפלגה תלוי במרחק ובשדרוגי המפרשים. בזמן הפלגה חולפים ימים אמיתיים, המחירים מתעדכנים, וריבית נצברת על הלוואות/חיסכון.
+הפלגה רגילה בין שני נמלים (שאינם לימסול) אורכת יום אחד, והפלגה ל/מפיראוס או ונציה אורכת יומיים. כל הפלגה שנוגעת בלימסול אורכת חצי יום בלבד — חוץ מהקטע לימסול-ונציה, שאורך יום שלם. בהפלגות של יום ומעלה חולפים ימים אמיתיים, המחירים מתעדכנים, וריבית נצברת על הלוואות/חיסכון.
 
 מגבלת מסלולים לפיראוס ולונציה
 אי אפשר להפליג ישירות לפיראוס או לונציה, וגם לא לחזור מהם ישירות, לכל נמל אחר. חובה לעצור קודם באחד משלושת נמלי הציר: לימסול, איסטנבול או אלכסנדריה. גם הפלגה ישירה בין פיראוס לונציה עצמן אסורה. נמלים חסומים למסלול ישיר מסומנים במפה במעומעם.
@@ -82,7 +82,7 @@ const _RULES_HE := """מטרת המשחק
 ניתן לטעון עד פי 1.5 מהקיבולת הנקובה של הספינה, אך כל יום הפלגה בעומס יתר יש סיכון הולך וגדל לאובדן מטען עודף, ובמקרים חמורים גם נזק לספינה שדורש תיקון בזהב.
 
 שדרוגי ספינה
-הרחבת מחסן מגדילה את קיבולת המטען. חיזוק גוף משפר קרבות פיראטים ומקטין נזקים. שדרוג מפרשים מקצר הפלגות ומשפר בריחה מפיראטים. לכל שדרוג שתי רמות, השנייה דורשת בעלות על הראשונה.
+הרחבת מחסן מגדילה את קיבולת המטען. חיזוק גוף משפר קרבות פיראטים ומקטין נזקים. שדרוג מפרשים משפר סיכויי בריחה מפיראטים. לכל שדרוג שתי רמות, השנייה דורשת בעלות על הראשונה.
 
 בנק
 ניתן להפקיד/למשוך זהב מחיסכון (עם ריבית), וללוות/להחזיר הלוואה עד למסגרת אשראי שתלויה בהון הנקי.
@@ -100,7 +100,7 @@ Trading
 "Buy"/"Sell" act on the chosen quantity. "Max" buys the largest amount you can afford that still fits the ship. "All" sells your entire held quantity of a good. Buying the max or selling all always shows a confirmation dialog first, and if the purchase would overload the ship, that warning appears inside the same confirmation dialog, before the purchase happens.
 
 Travel and time
-Voyage length depends on distance and sail upgrades. Real days pass while sailing: prices update, and interest accrues on loans/savings.
+A regular voyage between two ports (neither of them Limassol) takes one day, and a voyage to/from Piraeus or Venice takes two days. Any leg touching Limassol takes only half a day -- except the Limassol-Venice leg, which takes a full day. On voyages of a day or more, real days pass: prices update, and interest accrues on loans/savings.
 
 Route restriction for Piraeus and Venice
 You cannot sail directly to Piraeus or Venice, or directly back from them, to/from any other port. You must first stop at one of the three hub ports: Limassol, Istanbul, or Alexandria. Direct travel between Piraeus and Venice themselves is also blocked. Ports you can't reach directly are shown dimmed on the map.
@@ -115,7 +115,7 @@ Overload
 You can load up to 1.5x the ship's nominal capacity, but every day sailing overloaded carries a growing risk of losing excess cargo, and in severe cases hull damage requiring a gold repair.
 
 Ship upgrades
-Cargo Hold increases capacity. Hull Plating improves pirate fights and reduces damage. Sail Upgrade shortens voyages and improves fleeing pirates. Each has two tiers; the second requires owning the first.
+Cargo Hold increases capacity. Hull Plating improves pirate fights and reduces damage. Sail Upgrade improves your odds of fleeing pirates. Each has two tiers; the second requires owning the first.
 
 Bank
 Deposit/withdraw gold to/from savings (which earns interest), and borrow/repay a loan up to a credit limit based on your net worth.

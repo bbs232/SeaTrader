@@ -76,6 +76,46 @@ func _initialize() -> void:
 	assert(not GameState.is_traveling) # blocked route must be a no-op
 	print("route restriction OK")
 
+	# Fixed travel durations: regular leg = 1 day, far leg = 2 days, any
+	# Limassol leg = half a day, except Limassol<->Venice = 1 full day.
+	assert(GameState.get_travel_half_days("jaffa", "beirut") == 2)
+	assert(GameState.get_travel_half_days("alexandria", "istanbul") == 2)
+	assert(GameState.get_travel_half_days("alexandria", "piraeus") == 4)
+	assert(GameState.get_travel_half_days("istanbul", "venice") == 4)
+	assert(GameState.get_travel_half_days("jaffa", "limassol") == 1)
+	assert(GameState.get_travel_half_days("limassol", "piraeus") == 1)
+	assert(GameState.get_travel_half_days("limassol", "venice") == 2)
+	assert(GameState.get_travel_half_days("venice", "limassol") == 2)
+	print("travel duration table OK")
+
+	# Two half-day Limassol legs in a row bank into exactly one full day-tick;
+	# a lone half-day leg never rolls a travel event (too short to matter).
+	GameState.new_game(21, "jaffa")
+	var day_before: int = GameState.current_day
+	GameState.start_travel("limassol")
+	assert(GameState.current_port_id == "limassol")
+	assert(GameState.current_day == day_before)
+	GameState.start_travel("istanbul")
+	var half_day_guard := 0
+	while not GameState.pending_encounter.is_empty() and half_day_guard < 20:
+		GameState.resolve_pirate_encounter("pay")
+		half_day_guard += 1
+	assert(GameState.current_port_id == "istanbul")
+	assert(GameState.current_day == day_before + 1)
+	print("half-day carry-over OK")
+
+	# A regular one-day leg always resolves in exactly one day-tick.
+	GameState.new_game(21, "jaffa")
+	day_before = GameState.current_day
+	GameState.start_travel("beirut")
+	var regular_guard := 0
+	while not GameState.pending_encounter.is_empty() and regular_guard < 20:
+		GameState.resolve_pirate_encounter("pay")
+		regular_guard += 1
+	assert(GameState.current_port_id == "beirut")
+	assert(GameState.current_day == day_before + 1)
+	print("regular one-day leg OK")
+
 	# Overload mechanics in isolation
 	GameState.new_game(21, "jaffa")
 	GameState.gold = 5000
