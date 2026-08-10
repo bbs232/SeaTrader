@@ -37,6 +37,10 @@ func _test_game_overlays() -> void:
 	instance.call("_close_overlay")
 	print("shipyard panel OK")
 
+	instance.call("_open_market_panel")
+	instance.call("_close_overlay")
+	print("market panel OK")
+
 	instance.call("_open_travel_confirm", "venice")
 	instance.call("_close_overlay")
 	print("travel confirm panel OK")

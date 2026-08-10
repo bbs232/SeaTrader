@@ -18,6 +18,9 @@ menu_button,תפריט,Menu
 action_trade,מסחר,Trade
 action_bank,בנק,Bank
 action_shipyard,מספנה,Shipyard
+action_prices,מחירי שוק,Market Prices
+market_title,מחירי שוק בכל הנמלים,Market Prices Across Ports
+market_hint,המחירים עלולים להשתנות עד שתגיעו ליעד,Prices may shift by the time you arrive
 hud_day,יום,Day
 hud_gold,זהב,Gold
 hud_cargo,מטען,Cargo
@@ -29,6 +32,7 @@ trade_buy,קנה,Buy
 trade_sell,מכור,Sell
 trade_price,מחיר,Price
 trade_owned,ברשותך,Owned
+trade_overload_warning,⚠ עומס יתר! סיכון לאובדן מטען או נזק לספינה בדרך,⚠ Overloaded! Risk of losing cargo or ship damage en route
 bank_title,הבנק,The Bank
 bank_savings,חיסכון,Savings
 bank_loan,הלוואה,Loan
@@ -56,6 +60,10 @@ log_pirates_paid,שילמת %d זהב כופר לפיראטים.,You paid %d gol
 travel_uneventful,ההפלגה עברה בשלום.,The voyage passed without incident.
 log_storm_none,סערה עברה לידכם ללא נזק.,A storm passed nearby without damage.
 log_storm_loss,סערה פגעה בספינה! איבדת: %s,A storm struck the ship! You lost: %s
+log_aground_none,עליתם על שרטון אך יצאתם בשלום (תיקון: %d זהב),You ran aground but got off safely (repairs: %d gold)
+log_aground_loss,עליתם על שרטון! איבדתם: %s (תיקון: %d זהב),You ran aground! Lost: %s (repairs: %d gold)
+log_overload_minor,הצוות זרק חלק מהמטען העודף לים כדי לייצב את הספינה: %s,The crew threw some of the excess cargo overboard to stabilize the ship: %s
+log_overload_severe,עומס היתר שבר חלק מהספינה! איבדתם: %s (תיקון: %d זהב),The overload broke part of the ship! Lost: %s (repairs: %d gold)
 log_fair_wind,רוח גבית קיצרה את זמן ההפלגה ביום אחד.,A fair wind shortened the voyage by one day.
 log_market_demand,שמעתם שמועות על ביקוש מיוחד בנמלים.,You heard rumors of special demand in the ports.
 ok,אישור,OK

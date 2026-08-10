@@ -1,0 +1,29 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 1280 720">
+  <defs>
+    <linearGradient id="sea" x1="0" y1="0" x2="0" y2="1">
+      <stop offset="0" stop-color="#2C6E8E"/>
+      <stop offset="1" stop-color="#123A52"/>
+    </linearGradient>
+  </defs>
+  <rect width="1280" height="720" fill="url(#sea)"/>
+
+  <g stroke="#3E88AC" stroke-width="3" fill="none" opacity="0.45">
+    <path d="M0 250 Q 160 235 320 250 T 640 250 T 960 250 T 1280 250"/>
+    <path d="M0 420 Q 160 405 320 420 T 640 420 T 960 420 T 1280 420"/>
+    <path d="M0 650 Q 160 635 320 650 T 640 650 T 960 650 T 1280 650"/>
+  </g>
+
+  <!-- land masses: flat stylized coastlines, not geographically precise -->
+  <g fill="#DCC9A3" stroke="#8C7247" stroke-width="4" stroke-linejoin="round">
+    <!-- Southern Europe (Italy + Balkans), with a peninsula reaching toward Piraeus -->
+    <path d="M-10 -10 L 700 -10 L 700 70 Q 620 100 560 90 Q 500 130 520 230 Q 470 190 430 140 Q 380 110 300 100 Q 200 115 140 95 Q 60 110 -10 85 Z"/>
+    <!-- Anatolia / Turkey, bridging from Europe near the Bosphorus -->
+    <path d="M650 -10 L 1290 -10 L 1290 220 Q 1150 210 1000 195 Q 900 200 820 160 Q 760 130 700 100 Q 660 70 650 30 Z"/>
+    <!-- Cyprus, a small isolated island -->
+    <ellipse cx="760" cy="300" rx="70" ry="26" transform="rotate(-8 760 300)"/>
+    <!-- Levant coast (Lebanon + Israel), eastern edge -->
+    <path d="M1290 230 L 1290 720 L 980 720 Q 940 620 970 540 Q 930 470 950 400 Q 920 350 960 300 Q 1000 250 1080 235 Z"/>
+    <!-- Egypt / North Africa, southern edge -->
+    <path d="M-10 720 L 980 720 L 940 600 Q 850 570 760 590 Q 660 560 560 585 Q 460 560 360 600 Q 250 580 150 610 Q 60 590 -10 615 Z"/>
+  </g>
+</svg>

@@ -17,7 +17,7 @@ func _ready() -> void:
 	_build_ui()
 
 func _build_ui() -> void:
-	add_child(UIUtil.make_bg("res://assets/art/sea_bg.svg"))
+	add_child(UIUtil.make_bg("res://assets/art/map_bg.svg"))
 
 	map_layer = Control.new()
 	map_layer.set_anchors_preset(Control.PRESET_FULL_RECT)
@@ -108,6 +108,10 @@ func _build_dock() -> void:
 	var btn_shipyard := UIUtil.make_button(tr("action_shipyard"))
 	btn_shipyard.pressed.connect(_open_shipyard_panel)
 	hbox.add_child(btn_shipyard)
+
+	var btn_prices := UIUtil.make_button(tr("action_prices"))
+	btn_prices.pressed.connect(_open_market_panel)
+	hbox.add_child(btn_prices)
 
 func _refresh_all() -> void:
 	var port := GameState.get_port(GameState.current_port_id)
@@ -200,10 +204,13 @@ func _open_trade_panel() -> void:
 	vbox.add_child(UIUtil.make_title(tr("trade_title") % tr(port.name_key), 26))
 	var status_label := UIUtil.make_label("", 16)
 	vbox.add_child(status_label)
+	var overload_label := UIUtil.make_label("", 15, Color("#E0674A"))
+	vbox.add_child(overload_label)
 
 	var refresh_status := func():
 		status_label.text = "%s: %d   |   %s: %d/%d" % [
 			tr("hud_gold"), GameState.gold, tr("hud_cargo"), GameState.get_cargo_used(), GameState.ship_capacity]
+		overload_label.text = tr("trade_overload_warning") if GameState.is_overloaded() else ""
 
 	refresh_status.call()
 
@@ -377,6 +384,45 @@ func _open_shipyard_panel() -> void:
 	btn_close.pressed.connect(_close_overlay)
 	vbox.add_child(btn_close)
 
+## --- Market prices (all ports) ---
+
+func _open_market_panel() -> void:
+	var panel := _open_overlay()
+	var vbox := VBoxContainer.new()
+	vbox.add_theme_constant_override("separation", 10)
+	panel.add_child(vbox)
+
+	vbox.add_child(UIUtil.make_title(tr("market_title"), 26))
+	vbox.add_child(UIUtil.make_label(tr("market_hint"), 14, Color("#CFE8F2")))
+
+	var grid := GridContainer.new()
+	grid.columns = GameState.ports.size() + 1
+	grid.add_theme_constant_override("h_separation", 14)
+	grid.add_theme_constant_override("v_separation", 8)
+	vbox.add_child(grid)
+
+	grid.add_child(UIUtil.make_label("", 15))
+	for port in GameState.ports:
+		var is_here := port.id == GameState.current_port_id
+		var header := UIUtil.make_label(tr(port.name_key), 15, Color("#D9A441") if is_here else Color("#FFF6E3"))
+		header.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
+		header.custom_minimum_size = Vector2(90, 0)
+		grid.add_child(header)
+
+	for good in GameState.goods:
+		var name_label := UIUtil.make_label(tr(good.name_key), 15)
+		grid.add_child(name_label)
+		for port in GameState.ports:
+			var is_here := port.id == GameState.current_port_id
+			var price_label := UIUtil.make_label(str(GameState.get_price(port.id, good.id)), 15,
+				Color("#D9A441") if is_here else Color("#FFF6E3"))
+			price_label.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
+			grid.add_child(price_label)
+
+	var btn_close := UIUtil.make_button(tr("close"))
+	btn_close.pressed.connect(_close_overlay)
+	vbox.add_child(btn_close)
+
 ## --- Menu (save & exit) ---
 
 func _on_menu_pressed() -> void:
@@ -469,11 +515,19 @@ func _format_log_entry(entry: Dictionary) -> String:
 			var lost: Dictionary = entry.get("lost_goods", {})
 			if lost.is_empty():
 				return tr("log_storm_none")
-			var parts: Array = []
-			for good_id in lost.keys():
-				var good := GameState.get_good(good_id)
-				parts.append("%d %s" % [lost[good_id], tr(good.name_key) if good else good_id])
-			return tr("log_storm_loss") % ", ".join(parts)
+			return tr("log_storm_loss") % _format_goods_list(lost)
+		"aground":
+			var lost: Dictionary = entry.get("lost_goods", {})
+			var repair_cost: int = entry.get("repair_cost", 0)
+			if lost.is_empty():
+				return tr("log_aground_none") % repair_cost
+			return tr("log_aground_loss") % [_format_goods_list(lost), repair_cost]
+		"overload":
+			var lost: Dictionary = entry.get("lost_goods", {})
+			var repair_cost: int = entry.get("repair_cost", 0)
+			if entry.get("severe", false):
+				return tr("log_overload_severe") % [_format_goods_list(lost), repair_cost]
+			return tr("log_overload_minor") % _format_goods_list(lost)
 		"fair_wind":
 			return tr("log_fair_wind")
 		"market_demand":
@@ -482,6 +536,13 @@ func _format_log_entry(entry: Dictionary) -> String:
 			return _format_pirate_result(entry)
 		_:
 			return ""
+
+func _format_goods_list(lost: Dictionary) -> String:
+	var parts: Array = []
+	for good_id in lost.keys():
+		var good := GameState.get_good(good_id)
+		parts.append("%d %s" % [lost[good_id], tr(good.name_key) if good else good_id])
+	return ", ".join(parts)
 
 func _show_message(text: String) -> void:
 	var panel := _open_overlay()

@@ -1,7 +1,7 @@
 extends Resource
 class_name EventDef
 
-enum Kind { STORM, PIRATES, FAIR_WIND, MARKET_DEMAND }
+enum Kind { STORM, PIRATES, FAIR_WIND, MARKET_DEMAND, AGROUND }
 
 @export var id: String = ""
 @export var kind: Kind = Kind.STORM

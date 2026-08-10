@@ -30,10 +30,14 @@ func _initialize() -> void:
 	assert(not GameState.buy_upgrade("cargo2") == false or true) # cargo2 requires cargo1, already owned -> should succeed
 	print("upgrades OK, capacity=%d" % GameState.ship_capacity)
 
-	# Travel across many random runs to exercise events/pirates/storms without crashing
+	# Travel across many random runs to exercise events/pirates/storms/overload without crashing
 	for i in range(200):
 		GameState.new_game(21, "jaffa")
 		GameState.gold = 5000
+		# Overload the ship on half the runs to exercise the overload-risk path too.
+		if i % 2 == 0:
+			GameState.buy("wheat", GameState.get_overload_capacity())
+			assert(GameState.is_overloaded())
 		var destinations := ["alexandria", "istanbul", "limassol", "piraeus", "beirut", "venice"]
 		var dest: String = destinations[randi() % destinations.size()]
 		GameState.start_travel(dest)
@@ -43,7 +47,16 @@ func _initialize() -> void:
 			GameState.resolve_pirate_encounter(choices[randi() % choices.size()])
 			guard += 1
 		assert(guard < 20)
-	print("travel/events stress (200 runs) OK")
+	print("travel/events/overload stress (200 runs) OK")
+
+	# Overload mechanics in isolation
+	GameState.new_game(21, "jaffa")
+	GameState.gold = 5000
+	assert(not GameState.can_buy("wheat", GameState.get_overload_capacity() + 1))
+	assert(GameState.buy("wheat", GameState.get_overload_capacity()))
+	assert(GameState.is_overloaded())
+	assert(GameState.get_overload_ratio() > 0.99)
+	print("overload capacity OK")
 
 	# Bank
 	GameState.new_game(21, "jaffa")

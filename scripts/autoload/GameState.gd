@@ -13,6 +13,8 @@ const STARTING_DEFENSE_POINTS := 0
 const BASE_TRAVEL_DIVISOR := 150.0
 const MAX_LOAN_FACTOR := 2.0 # can borrow up to 2x current net worth
 const DAILY_INTEREST := 0.02
+const OVERLOAD_ALLOWANCE := 1.5 # can risk-load up to 150% of nominal capacity
+const OVERLOAD_DAILY_RISK := 0.5 # scaled by how far over nominal capacity you are
 
 var goods: Array[Good] = []
 var ports: Array[Port] = []
@@ -83,6 +85,7 @@ func _load_definitions() -> void:
 		"res://data/events/pirates.tres",
 		"res://data/events/fair_wind.tres",
 		"res://data/events/market_demand.tres",
+		"res://data/events/aground.tres",
 	]:
 		events.append(load(path) as EventDef)
 
@@ -162,10 +165,22 @@ func get_cargo_used() -> int:
 func get_cargo_free() -> int:
 	return ship_capacity - get_cargo_used()
 
+## Ships can be risk-loaded beyond nominal capacity (see OVERLOAD_ALLOWANCE),
+## trading a higher daily chance of losing cargo/damaging the hull for extra cargo space.
+func get_overload_capacity() -> int:
+	return int(ship_capacity * OVERLOAD_ALLOWANCE)
+
+func is_overloaded() -> bool:
+	return get_cargo_used() > ship_capacity
+
+## 0.0 when within nominal capacity, rising toward 1.0 at the maximum overload allowance.
+func get_overload_ratio() -> float:
+	return clamp(float(get_cargo_used() - ship_capacity) / ship_capacity, 0.0, OVERLOAD_ALLOWANCE - 1.0) / (OVERLOAD_ALLOWANCE - 1.0)
+
 func can_buy(good_id: String, qty: int) -> bool:
 	if qty <= 0:
 		return false
-	if qty > get_cargo_free():
+	if get_cargo_used() + qty > get_overload_capacity():
 		return false
 	var cost := get_price(current_port_id, good_id) * qty
 	return cost <= gold
@@ -310,7 +325,7 @@ func _advance_day() -> void:
 		_end_game()
 
 func _roll_travel_event() -> void:
-	var from_port := get_port(current_port_id if not is_traveling else current_port_id)
+	var from_port := get_port(current_port_id)
 	var to_port := get_port(travel_destination_id)
 	var danger: float = 0.2
 	if from_port and to_port:
@@ -322,9 +337,13 @@ func _roll_travel_event() -> void:
 			chance *= (0.5 + danger)
 		elif ev.kind == EventDef.Kind.STORM:
 			chance *= (0.7 + danger * 0.5)
+		elif ev.kind == EventDef.Kind.AGROUND:
+			chance *= (0.6 + danger * 0.6)
 		if randf() < chance:
 			_trigger_event(ev)
-			return # only one event per travel day
+			return # only one weather/hazard event per travel day
+
+	_check_overload_risk()
 
 func _trigger_event(ev: EventDef) -> void:
 	match ev.kind:
@@ -337,10 +356,45 @@ func _trigger_event(ev: EventDef) -> void:
 			travel_log.append({"type": "fair_wind"})
 		EventDef.Kind.MARKET_DEMAND:
 			travel_log.append({"type": "market_demand"})
+		EventDef.Kind.AGROUND:
+			_apply_aground()
 
 func _apply_storm() -> void:
 	var mitigation: float = clamp(ship_defense_points * 0.1, 0.0, 0.6)
 	var severity := randf_range(0.05, 0.25) * (1.0 - mitigation)
+	var lost_goods := _jettison_cargo(severity)
+	travel_log.append({"type": "storm", "lost_goods": lost_goods})
+
+func _apply_aground() -> void:
+	var mitigation: float = clamp(ship_defense_points * 0.08, 0.0, 0.5)
+	var severity := randf_range(0.1, 0.3) * (1.0 - mitigation)
+	var lost_goods := _jettison_cargo(severity)
+	var repair_cost := int(gold * randf_range(0.05, 0.12))
+	gold -= repair_cost
+	travel_log.append({"type": "aground", "lost_goods": lost_goods, "repair_cost": repair_cost})
+
+## Carrying more than nominal capacity risks losing part of the excess (or
+## worse) every travel day; the more overloaded, the higher the chance and
+## the harsher the outcome.
+func _check_overload_risk() -> void:
+	var ratio := get_overload_ratio()
+	if ratio <= 0.0:
+		return
+	if randf() < ratio * OVERLOAD_DAILY_RISK:
+		_apply_overload_mishap(ratio)
+
+func _apply_overload_mishap(ratio: float) -> void:
+	var severe := randf() < ratio
+	var severity := randf_range(0.35, 0.6) if severe else randf_range(0.15, 0.3)
+	var lost_goods := _jettison_cargo(severity)
+	var repair_cost := 0
+	if severe:
+		repair_cost = int(gold * randf_range(0.05, 0.15))
+		gold -= repair_cost
+	travel_log.append({"type": "overload", "severe": severe, "lost_goods": lost_goods, "repair_cost": repair_cost})
+
+## Removes a `severity` fraction of every cargo good (rounded up) and returns what was lost.
+func _jettison_cargo(severity: float) -> Dictionary:
 	var lost_goods := {}
 	for good_id in cargo.keys():
 		var lost := int(ceil(cargo[good_id] * severity))
@@ -350,7 +404,7 @@ func _apply_storm() -> void:
 	for good_id in lost_goods.keys():
 		if cargo[good_id] <= 0:
 			cargo.erase(good_id)
-	travel_log.append({"type": "storm", "lost_goods": lost_goods})
+	return lost_goods
 
 func _start_pirate_encounter() -> void:
 	var pirate_strength := randf_range(0.5, 1.5)
@@ -376,16 +430,7 @@ func resolve_pirate_encounter(choice: String) -> Dictionary:
 				result["outcome"] = "won"
 				result["bounty"] = bounty
 			else:
-				var severity := randf_range(0.2, 0.5)
-				var lost_goods := {}
-				for good_id in cargo.keys():
-					var lost := int(ceil(cargo[good_id] * severity))
-					if lost > 0:
-						cargo[good_id] -= lost
-						lost_goods[good_id] = lost
-				for good_id in lost_goods.keys():
-					if cargo[good_id] <= 0:
-						cargo.erase(good_id)
+				var lost_goods := _jettison_cargo(randf_range(0.2, 0.5))
 				result["outcome"] = "lost"
 				result["lost_goods"] = lost_goods
 		"flee":
