@@ -21,6 +21,9 @@ func _build_ui() -> void:
 
 	map_layer = Control.new()
 	map_layer.set_anchors_preset(Control.PRESET_FULL_RECT)
+	# The map uses absolute canvas coordinates for ports/ship; it must not be
+	# mirrored by RTL locales the way text/containers are.
+	map_layer.layout_direction = Control.LAYOUT_DIRECTION_LTR
 	add_child(map_layer)
 	_build_map()
 
@@ -34,44 +37,54 @@ func _build_ui() -> void:
 	_refresh_all()
 
 func _build_map() -> void:
+	# NOTE: position/size must be assigned AFTER add_child(). Godot resolves
+	# RTL anchor-mirroring against the parent's width at the moment position/
+	# size are set; before the node is in the tree that width is unknown
+	# (treated as 0), which sends manually-positioned controls flying off to
+	# huge negative/positive coordinates under the Hebrew (RTL) locale.
 	for port in GameState.ports:
 		var btn := TextureButton.new()
+		btn.layout_direction = Control.LAYOUT_DIRECTION_LTR
 		btn.texture_normal = load("res://assets/art/port_marker.svg")
-		btn.custom_minimum_size = Vector2(40, 40)
-		btn.position = port.map_position - Vector2(20, 20)
 		btn.pressed.connect(_on_port_marker_pressed.bind(port.id))
 		map_layer.add_child(btn)
+		btn.size = Vector2(40, 40)
+		btn.position = port.map_position - Vector2(20, 20)
 
 		var label := UIUtil.make_label(tr(port.name_key), 16)
-		label.position = port.map_position + Vector2(-40, 20)
-		label.custom_minimum_size = Vector2(100, 0)
+		label.layout_direction = Control.LAYOUT_DIRECTION_LTR
 		label.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
 		map_layer.add_child(label)
+		label.position = port.map_position + Vector2(-40, 20)
+		label.size = Vector2(100, 24)
 
 		port_buttons[port.id] = btn
 
 	ship_icon = TextureRect.new()
 	ship_icon.texture = load("res://assets/art/ship.svg")
-	ship_icon.custom_minimum_size = Vector2(36, 36)
 	ship_icon.mouse_filter = Control.MOUSE_FILTER_IGNORE
 	map_layer.add_child(ship_icon)
+	ship_icon.size = Vector2(36, 36)
 
 func _build_hud() -> void:
 	var bg := UIUtil.make_panel()
 	bg.set_anchors_preset(Control.PRESET_TOP_WIDE)
 	bg.mouse_filter = Control.MOUSE_FILTER_IGNORE
 	hud_layer.add_child(bg)
+	# Reserve room on the physical right edge (where the LTR-pinned menu
+	# button sits) so the HUD text never runs underneath it.
+	(bg.get_theme_stylebox("panel") as StyleBoxFlat).content_margin_right = 170
 
 	hud_label = UIUtil.make_label("", 20)
 	bg.add_child(hud_label)
 
 	var menu_btn := UIUtil.make_button(tr("menu_button"), 44, 18)
 	menu_btn.mouse_filter = Control.MOUSE_FILTER_STOP
-	menu_btn.set_anchors_preset(Control.PRESET_TOP_RIGHT)
-	menu_btn.position = Vector2(-150, 8)
-	menu_btn.custom_minimum_size = Vector2(140, 40)
+	menu_btn.layout_direction = Control.LAYOUT_DIRECTION_LTR
 	menu_btn.pressed.connect(_on_menu_pressed)
 	hud_layer.add_child(menu_btn)
+	menu_btn.size = Vector2(140, 40)
+	menu_btn.position = Vector2(1130, 8)
 
 func _build_dock() -> void:
 	dock_panel = UIUtil.make_panel()
