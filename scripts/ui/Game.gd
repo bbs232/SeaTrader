@@ -2,12 +2,19 @@ extends Control
 
 var map_layer: Control
 var hud_layer: Control
-var overlay_layer: CanvasLayer
+## A real stack, not a single slot: GameState can resolve a whole voyage
+## synchronously and fire more than one signal in a row (e.g. a pirate
+## encounter that immediately resolves into arrival, or a second encounter),
+## each opening its own popup before the player has closed the previous one.
+var overlay_stack: Array[CanvasLayer] = []
 
 var port_buttons: Dictionary = {} # port_id -> TextureButton
 var ship_icon: TextureRect
 var hud_label: Label
 var dock_panel: PanelContainer
+
+var ship_tween: Tween
+var is_animating_travel: bool = false
 
 func _ready() -> void:
 	UIUtil.apply_rtl(self)
@@ -123,27 +130,57 @@ func _refresh_all() -> void:
 		tr("hud_networth"), GameState.get_net_worth(),
 		port_name,
 	]
-	if port:
+	if port and not is_animating_travel:
 		ship_icon.position = port.map_position - Vector2(18, 18)
-	dock_panel.visible = not GameState.is_traveling
+	dock_panel.visible = not GameState.is_traveling and not is_animating_travel
 
 func _on_port_marker_pressed(port_id: String) -> void:
-	if GameState.is_traveling:
+	if GameState.is_traveling or is_animating_travel:
 		return
 	if port_id == GameState.current_port_id:
 		return
 	_open_travel_confirm(port_id)
 
+## --- Ship travel animation ---
+##
+## GameState resolves an entire voyage synchronously (advancing days,
+## rolling events) and only returns control to us when it either finishes
+## or hits a pirate encounter that needs the player's input. So rather than
+## pacing the animation to real time, each signal we get is treated as one
+## "leg": a pirate encounter glides the ship halfway from its current visual
+## spot toward the destination (still "at sea" when the dialog appears),
+## and the final arrival always glides the rest of the way there exactly,
+## no matter how many encounters happened along the route.
+
+func _animate_ship_to(map_pos: Vector2, fraction: float = 1.0) -> void:
+	var target := map_pos - Vector2(18, 18)
+	var start: Vector2 = ship_icon.position
+	var leg_target: Vector2 = start.lerp(target, fraction)
+	var duration: float = clamp(start.distance_to(leg_target) / 220.0, 0.4, 2.2)
+
+	is_animating_travel = true
+	dock_panel.visible = false
+	if ship_tween:
+		ship_tween.kill()
+	ship_tween = create_tween()
+	ship_tween.tween_property(ship_icon, "position", leg_target, duration)
+	if fraction >= 1.0:
+		ship_tween.finished.connect(func():
+			is_animating_travel = false
+			_refresh_all()
+		)
+
 ## --- Overlay helpers ---
 
 func _open_overlay() -> PanelContainer:
-	overlay_layer = CanvasLayer.new()
-	add_child(overlay_layer)
+	var layer := CanvasLayer.new()
+	add_child(layer)
+	overlay_stack.append(layer)
 
 	var dim := ColorRect.new()
 	dim.color = Color(0, 0, 0, 0.55)
 	dim.set_anchors_preset(Control.PRESET_FULL_RECT)
-	overlay_layer.add_child(dim)
+	layer.add_child(dim)
 
 	var scroll := ScrollContainer.new()
 	scroll.set_anchors_preset(Control.PRESET_FULL_RECT)
@@ -157,25 +194,41 @@ func _open_overlay() -> PanelContainer:
 
 	var panel := UIUtil.make_panel()
 	center.add_child(panel)
+	panel.set_meta("overlay_layer", layer)
 	return panel
 
+## Closes only the top-most overlay, revealing whatever was open beneath it
+## (there may be nothing, or there may be an earlier popup still waiting).
 func _close_overlay() -> void:
-	if overlay_layer:
-		overlay_layer.queue_free()
-		overlay_layer = null
+	if not overlay_stack.is_empty():
+		var layer: CanvasLayer = overlay_stack.pop_back()
+		layer.queue_free()
+	_refresh_all()
+
+## Closes exactly the overlay owned by `panel`, wherever it sits in the
+## stack. Needed when a GameState call can itself push a newer overlay on
+## top before the code that opened `panel` gets a chance to close it (e.g.
+## resolving a pirate encounter can immediately trigger arrival's own
+## popup) — closing "whatever is on top" at that point would be wrong.
+func _close_specific_overlay(panel: PanelContainer) -> void:
+	if panel and panel.has_meta("overlay_layer"):
+		var layer: CanvasLayer = panel.get_meta("overlay_layer")
+		overlay_stack.erase(layer)
+		layer.queue_free()
 	_refresh_all()
 
 ## Stacks a small yes/no confirmation on top of whatever panel is currently
 ## open (e.g. the trade panel), without closing it. on_confirm only runs if
 ## the player accepts; cancelling or dismissing just removes the popup.
 func _show_confirm(text: String, on_confirm: Callable) -> void:
-	if overlay_layer == null:
+	if overlay_stack.is_empty():
 		return
+	var layer: CanvasLayer = overlay_stack.back()
 
 	var dim := ColorRect.new()
 	dim.color = Color(0, 0, 0, 0.55)
 	dim.set_anchors_preset(Control.PRESET_FULL_RECT)
-	overlay_layer.add_child(dim)
+	layer.add_child(dim)
 
 	var center := CenterContainer.new()
 	center.set_anchors_preset(Control.PRESET_FULL_RECT)
@@ -567,6 +620,10 @@ func _on_menu_pressed() -> void:
 ## --- Pirate encounter ---
 
 func _on_pirate_encounter_started(_details: Dictionary) -> void:
+	var dest := GameState.get_port(GameState.travel_destination_id)
+	if dest:
+		_animate_ship_to(dest.map_position, 0.5)
+
 	var panel := _open_overlay()
 	var vbox := VBoxContainer.new()
 	vbox.custom_minimum_size = Vector2(380, 0)
@@ -585,20 +642,24 @@ func _on_pirate_encounter_started(_details: Dictionary) -> void:
 	vbox.add_child(UIUtil.make_label(tr("pirates_desc"), 16))
 
 	var btn_fight := UIUtil.make_button(tr("pirates_fight"))
-	btn_fight.pressed.connect(func(): _resolve_pirates("fight"))
+	btn_fight.pressed.connect(func(): _resolve_pirates("fight", panel))
 	vbox.add_child(btn_fight)
 
 	var btn_flee := UIUtil.make_button(tr("pirates_flee"))
-	btn_flee.pressed.connect(func(): _resolve_pirates("flee"))
+	btn_flee.pressed.connect(func(): _resolve_pirates("flee", panel))
 	vbox.add_child(btn_flee)
 
 	var btn_pay := UIUtil.make_button(tr("pirates_pay"))
-	btn_pay.pressed.connect(func(): _resolve_pirates("pay"))
+	btn_pay.pressed.connect(func(): _resolve_pirates("pay", panel))
 	vbox.add_child(btn_pay)
 
-func _resolve_pirates(choice: String) -> void:
+## `panel` (not just "the top overlay") is closed explicitly here because
+## resolve_pirate_encounter() can synchronously resolve the rest of the
+## voyage and push a newer popup (arrival, or another encounter) on top of
+## this dialog before we get back here to close it.
+func _resolve_pirates(choice: String, panel: PanelContainer) -> void:
 	var result := GameState.resolve_pirate_encounter(choice)
-	_close_overlay()
+	_close_specific_overlay(panel)
 	_show_message(_format_pirate_result(result))
 
 func _format_pirate_result(result: Dictionary) -> String:
@@ -618,7 +679,11 @@ func _format_pirate_result(result: Dictionary) -> String:
 
 ## --- Arrival / travel report ---
 
-func _on_arrived_at_port(_port_id: String, log: Array) -> void:
+func _on_arrived_at_port(port_id: String, log: Array) -> void:
+	var dest := GameState.get_port(port_id)
+	if dest:
+		_animate_ship_to(dest.map_position, 1.0)
+
 	if GameState.current_day > GameState.game_length_days:
 		return # game_ended will handle the transition
 	var lines: Array = []

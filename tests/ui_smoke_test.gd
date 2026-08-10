@@ -31,6 +31,21 @@ func _test_game_overlays() -> void:
 	instance.call("_close_overlay")
 	print("trade panel OK")
 
+	# Regression test: resolving a pirate encounter can itself push a newer
+	# overlay (arrival report / another encounter) before the pirate dialog
+	# closes itself. Closing must target that specific dialog, not "whatever
+	# is on top", or a nested popup gets destroyed/orphaned. See
+	# _close_specific_overlay in Game.gd.
+	var panel_a: PanelContainer = instance.call("_open_overlay")
+	var panel_b: PanelContainer = instance.call("_open_overlay")
+	assert(instance.overlay_stack.size() == 2)
+	instance.call("_close_specific_overlay", panel_a)
+	assert(instance.overlay_stack.size() == 1)
+	assert(instance.overlay_stack[0] == panel_b.get_meta("overlay_layer"))
+	instance.call("_close_overlay")
+	assert(instance.overlay_stack.size() == 0)
+	print("overlay stack targeted-close OK")
+
 	instance.call("_open_bank_panel")
 	instance.call("_close_overlay")
 	print("bank panel OK")
@@ -50,6 +65,10 @@ func _test_game_overlays() -> void:
 	instance.call("_on_pirate_encounter_started", {"pirate_strength": 1.0})
 	instance.call("_close_overlay")
 	print("pirate encounter panel OK")
+
+	instance.call("_animate_ship_to", Vector2(100, 100), 1.0)
+	assert(instance.is_animating_travel == true)
+	print("ship travel animation start OK")
 
 	instance.call("_on_menu_pressed")
 	instance.call("_close_overlay")
