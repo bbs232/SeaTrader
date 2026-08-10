@@ -58,9 +58,22 @@ func _test_game_overlays() -> void:
 	instance.call("_close_overlay")
 	print("market panel OK")
 
-	instance.call("_open_travel_confirm", "venice")
+	instance.call("_open_travel_confirm", "limassol")
 	instance.call("_close_overlay")
 	print("travel confirm panel OK")
+
+	# Blocked route (jaffa -> venice needs a Limassol/Istanbul/Alexandria stopover):
+	# pressing the marker should show an explanatory message instead of a travel confirm.
+	assert(GameState.current_port_id == "jaffa")
+	assert(instance.overlay_stack.size() == 0)
+	instance.call("_on_port_marker_pressed", "venice")
+	assert(instance.overlay_stack.size() == 1)
+	instance.call("_close_overlay")
+	print("blocked route message OK")
+
+	instance.call("_open_rules_panel")
+	instance.call("_close_overlay")
+	print("rules panel OK")
 
 	instance.call("_on_pirate_encounter_started", {"pirate_strength": 1.0})
 	instance.call("_close_overlay")

@@ -27,6 +27,9 @@ hud_cargo,מטען,Cargo
 hud_networth,הון נקי,Net Worth
 travel_estimate,משך ההפלגה המשוער: %d ימים,Estimated voyage: %d days
 travel_confirm,הפלג,Set Sail
+route_blocked,אי אפשר להפליג ישירות לשם או משם: כדי להגיע לפיראוס או לונציה (או לחזור מהם) חובה לעצור קודם בלימסול, באיסטנבול או באלכסנדריה.,Cannot sail there directly: reaching (or returning from) Piraeus or Venice requires a stop first at Limassol, Istanbul or Alexandria.
+menu_rules,חוקי המשחק,Game Rules
+rules_title,חוקי המשחק,Game Rules
 trade_title,מסחר ב-%s,Trade at %s
 trade_buy,קנה,Buy
 trade_sell,מכור,Sell

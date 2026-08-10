@@ -16,6 +16,12 @@ const DAILY_INTEREST := 0.02
 const OVERLOAD_ALLOWANCE := 1.5 # can risk-load up to 150% of nominal capacity
 const OVERLOAD_DAILY_RISK := 0.5 # scaled by how far over nominal capacity you are
 
+## Piraeus and Venice sit at the far corners of the trade map; direct voyages
+## to/from them are blocked unless one of these hub ports is the other end
+## of the leg (i.e. they must be used as a stopover first).
+const HUB_PORTS: Array[String] = ["limassol", "istanbul", "alexandria"]
+const FAR_PORTS: Array[String] = ["piraeus", "venice"]
+
 var goods: Array[Good] = []
 var ports: Array[Port] = []
 var upgrades: Array[ShipUpgrade] = []
@@ -302,8 +308,21 @@ func get_travel_days(from_id: String, to_id: String) -> int:
 	var days := ceili(dist / (BASE_TRAVEL_DIVISOR * speed_factor))
 	return max(1, days)
 
+## Direct travel is disallowed between a far port (Piraeus/Venice) and
+## anything other than a hub port (Limassol/Istanbul/Alexandria) — including
+## between the two far ports themselves. A hub port on either end always
+## satisfies the required stopover.
+func can_travel_directly(from_id: String, to_id: String) -> bool:
+	if FAR_PORTS.has(from_id) and not HUB_PORTS.has(to_id):
+		return false
+	if FAR_PORTS.has(to_id) and not HUB_PORTS.has(from_id):
+		return false
+	return true
+
 func start_travel(destination_id: String) -> void:
 	if is_traveling or destination_id == current_port_id:
+		return
+	if not can_travel_directly(current_port_id, destination_id):
 		return
 	is_traveling = true
 	travel_destination_id = destination_id

@@ -133,11 +133,28 @@ func _refresh_all() -> void:
 	if port and not is_animating_travel:
 		ship_icon.position = port.map_position - Vector2(18, 18)
 	dock_panel.visible = not GameState.is_traveling and not is_animating_travel
+	_update_port_marker_states()
+
+## Dims ports that can't be reached directly from here (Piraeus/Venice
+## without a Limassol/Istanbul/Alexandria stopover) so the restriction is
+## visible on the map before the player even clicks.
+func _update_port_marker_states() -> void:
+	for port_id in port_buttons.keys():
+		var btn: TextureButton = port_buttons[port_id]
+		if port_id == GameState.current_port_id:
+			btn.modulate = Color(1, 1, 1, 1)
+		elif GameState.can_travel_directly(GameState.current_port_id, port_id):
+			btn.modulate = Color(1, 1, 1, 1)
+		else:
+			btn.modulate = Color(1, 1, 1, 0.4)
 
 func _on_port_marker_pressed(port_id: String) -> void:
 	if GameState.is_traveling or is_animating_travel:
 		return
 	if port_id == GameState.current_port_id:
+		return
+	if not GameState.can_travel_directly(GameState.current_port_id, port_id):
+		_show_message(tr("route_blocked"))
 		return
 	_open_travel_confirm(port_id)
 
@@ -597,6 +614,30 @@ func _open_market_panel() -> void:
 	btn_close.pressed.connect(_close_overlay)
 	vbox.add_child(btn_close)
 
+## --- Rules ---
+
+func _open_rules_panel() -> void:
+	var panel := _open_overlay()
+	var vbox := VBoxContainer.new()
+	vbox.custom_minimum_size = Vector2(600, 0)
+	vbox.add_theme_constant_override("separation", 10)
+	panel.add_child(vbox)
+
+	vbox.add_child(UIUtil.make_title(tr("rules_title"), 26))
+
+	var scroll := ScrollContainer.new()
+	scroll.custom_minimum_size = Vector2(0, 380)
+	vbox.add_child(scroll)
+
+	var label := UIUtil.make_label(UIUtil.load_rules_text(), 16)
+	label.autowrap_mode = TextServer.AUTOWRAP_WORD
+	label.custom_minimum_size = Vector2(580, 0)
+	scroll.add_child(label)
+
+	var btn_close := UIUtil.make_button(tr("close"))
+	btn_close.pressed.connect(_close_overlay)
+	vbox.add_child(btn_close)
+
 ## --- Menu (save & exit) ---
 
 func _on_menu_pressed() -> void:
@@ -609,6 +650,10 @@ func _on_menu_pressed() -> void:
 	var btn_resume := UIUtil.make_button(tr("menu_resume"))
 	btn_resume.pressed.connect(_close_overlay)
 	vbox.add_child(btn_resume)
+
+	var btn_rules := UIUtil.make_button(tr("menu_rules"))
+	btn_rules.pressed.connect(_open_rules_panel)
+	vbox.add_child(btn_rules)
 
 	var btn_save_exit := UIUtil.make_button(tr("menu_save_exit"))
 	btn_save_exit.pressed.connect(func():

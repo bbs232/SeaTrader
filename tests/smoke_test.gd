@@ -48,9 +48,11 @@ func _initialize() -> void:
 		if i % 2 == 0:
 			GameState.buy("wheat", GameState.get_overload_capacity())
 			assert(GameState.is_overloaded())
-		var destinations := ["alexandria", "istanbul", "limassol", "piraeus", "beirut", "venice"]
+		# jaffa can't reach piraeus/venice directly (route restriction) -- pick a reachable destination.
+		var destinations := ["alexandria", "istanbul", "limassol", "beirut"]
 		var dest: String = destinations[randi() % destinations.size()]
 		GameState.start_travel(dest)
+		assert(GameState.is_traveling or GameState.current_port_id == dest)
 		var guard := 0
 		while not GameState.pending_encounter.is_empty() and guard < 20:
 			var choices := ["fight", "flee", "pay"]
@@ -58,6 +60,21 @@ func _initialize() -> void:
 			guard += 1
 		assert(guard < 20)
 	print("travel/events/overload stress (200 runs) OK")
+
+	# Route restriction: Piraeus/Venice require a Limassol/Istanbul/Alexandria stopover
+	GameState.new_game(21, "jaffa")
+	assert(not GameState.can_travel_directly("jaffa", "piraeus"))
+	assert(not GameState.can_travel_directly("jaffa", "venice"))
+	assert(not GameState.can_travel_directly("piraeus", "jaffa"))
+	assert(not GameState.can_travel_directly("venice", "beirut"))
+	assert(not GameState.can_travel_directly("piraeus", "venice"))
+	assert(GameState.can_travel_directly("jaffa", "limassol"))
+	assert(GameState.can_travel_directly("limassol", "piraeus"))
+	assert(GameState.can_travel_directly("istanbul", "venice"))
+	assert(GameState.can_travel_directly("alexandria", "venice"))
+	GameState.start_travel("piraeus")
+	assert(not GameState.is_traveling) # blocked route must be a no-op
+	print("route restriction OK")
 
 	# Overload mechanics in isolation
 	GameState.new_game(21, "jaffa")

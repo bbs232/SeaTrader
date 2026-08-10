@@ -46,6 +46,10 @@ func _build_ui() -> void:
 	btn_lang.pressed.connect(_on_language_pressed)
 	vbox.add_child(btn_lang)
 
+	var btn_rules := UIUtil.make_button(tr("menu_rules"))
+	btn_rules.pressed.connect(_on_rules_pressed)
+	vbox.add_child(btn_rules)
+
 	if not OS.has_feature("web"):
 		var btn_quit := UIUtil.make_button(tr("menu_quit"))
 		btn_quit.pressed.connect(func(): get_tree().quit())
@@ -128,6 +132,43 @@ func _on_highscores_pressed() -> void:
 
 	var btn_close := UIUtil.make_button(tr("close"))
 	btn_close.pressed.connect(func(): _highscores_layer.queue_free())
+	vbox.add_child(btn_close)
+
+func _on_rules_pressed() -> void:
+	var layer := CanvasLayer.new()
+	add_child(layer)
+
+	var dim := ColorRect.new()
+	dim.color = Color(0, 0, 0, 0.55)
+	dim.set_anchors_preset(Control.PRESET_FULL_RECT)
+	layer.add_child(dim)
+
+	var margin := MarginContainer.new()
+	margin.set_anchors_preset(Control.PRESET_FULL_RECT)
+	for side in ["left", "right", "top", "bottom"]:
+		margin.add_theme_constant_override("margin_" + side, 60)
+	dim.add_child(margin)
+
+	var panel := UIUtil.make_panel()
+	margin.add_child(panel)
+
+	var vbox := VBoxContainer.new()
+	vbox.add_theme_constant_override("separation", 10)
+	panel.add_child(vbox)
+
+	vbox.add_child(UIUtil.make_title(tr("rules_title"), 26))
+
+	var scroll := ScrollContainer.new()
+	scroll.size_flags_vertical = Control.SIZE_EXPAND_FILL
+	vbox.add_child(scroll)
+
+	var label := UIUtil.make_label(UIUtil.load_rules_text(), 16)
+	label.autowrap_mode = TextServer.AUTOWRAP_WORD
+	label.custom_minimum_size = Vector2(600, 0)
+	scroll.add_child(label)
+
+	var btn_close := UIUtil.make_button(tr("close"))
+	btn_close.pressed.connect(func(): layer.queue_free())
 	vbox.add_child(btn_close)
 
 func _on_language_pressed() -> void:
