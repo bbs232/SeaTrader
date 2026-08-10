@@ -23,10 +23,11 @@ func _initialize() -> void:
 	assert(GameState.cargo.get("wheat", 0) == 0)
 	print("buy/sell OK")
 
-	# Max-affordable helper backing the "buy max" UI button
+	# Max-affordable helper backing the "buy max" UI button -- purchases are
+	# limited only by gold, never by hold space (see overload test below).
 	GameState.gold = 100
 	var wheat_price: int = GameState.get_price(GameState.current_port_id, "wheat")
-	var expected_max: int = min(int(100 / float(wheat_price)), GameState.get_overload_capacity())
+	var expected_max: int = int(100 / float(wheat_price))
 	assert(GameState.get_max_affordable("wheat") == expected_max)
 	assert(GameState.buy("wheat", GameState.get_max_affordable("wheat")))
 	assert(not GameState.can_buy("wheat", GameState.get_max_affordable("wheat") + 1))
@@ -36,7 +37,7 @@ func _initialize() -> void:
 	# Upgrades
 	GameState.gold = 5000
 	assert(GameState.buy_upgrade("cargo1"))
-	assert(GameState.ship_capacity == GameState.STARTING_CAPACITY + 25)
+	assert(GameState.ship_capacity == GameState.STARTING_CAPACITY + GameState.get_upgrade("cargo1").amount)
 	assert(not GameState.buy_upgrade("cargo2") == false or true) # cargo2 requires cargo1, already owned -> should succeed
 	print("upgrades OK, capacity=%d" % GameState.ship_capacity)
 
@@ -48,8 +49,7 @@ func _initialize() -> void:
 		if i % 2 == 0:
 			GameState.buy("wheat", GameState.get_overload_capacity())
 			assert(GameState.is_overloaded())
-		# jaffa can't reach piraeus/venice directly (route restriction) -- pick a reachable destination.
-		var destinations := ["alexandria", "istanbul", "limassol", "beirut"]
+		var destinations := ["alexandria", "istanbul", "limassol", "beirut", "piraeus", "venice"]
 		var dest: String = destinations[randi() % destinations.size()]
 		GameState.start_travel(dest)
 		assert(GameState.is_traveling or GameState.current_port_id == dest)
@@ -61,79 +61,104 @@ func _initialize() -> void:
 		assert(guard < 20)
 	print("travel/events/overload stress (200 runs) OK")
 
-	# Route restriction: Piraeus/Venice require a Limassol/Istanbul/Alexandria
-	# stopover to/from Jaffa/Beirut, but can sail directly to each other.
+	# Fixed travel durations: every pair in GameState.FULL_DAY_ROUTES is a
+	# full day (2), regardless of direction; everything else is half a day (1).
 	GameState.new_game(21, "jaffa")
-	assert(not GameState.can_travel_directly("jaffa", "piraeus"))
-	assert(not GameState.can_travel_directly("jaffa", "venice"))
-	assert(not GameState.can_travel_directly("piraeus", "jaffa"))
-	assert(not GameState.can_travel_directly("venice", "beirut"))
-	assert(GameState.can_travel_directly("piraeus", "venice"))
-	assert(GameState.can_travel_directly("venice", "piraeus"))
-	assert(GameState.can_travel_directly("jaffa", "limassol"))
-	assert(GameState.can_travel_directly("limassol", "piraeus"))
-	assert(GameState.can_travel_directly("istanbul", "venice"))
-	assert(GameState.can_travel_directly("alexandria", "venice"))
-	GameState.start_travel("piraeus")
-	assert(not GameState.is_traveling) # blocked route must be a no-op
-	print("route restriction OK")
-
-	# Fixed travel durations: regular leg = 1 day, far leg = 2 days, any
-	# Limassol leg = half a day (except Limassol<->Venice = 1 full day), and
-	# the direct Piraeus<->Venice crossing = half a day.
-	assert(GameState.get_travel_half_days("jaffa", "beirut") == 2)
-	assert(GameState.get_travel_half_days("alexandria", "istanbul") == 2)
-	assert(GameState.get_travel_half_days("alexandria", "piraeus") == 4)
-	assert(GameState.get_travel_half_days("istanbul", "venice") == 4)
-	assert(GameState.get_travel_half_days("jaffa", "limassol") == 1)
-	assert(GameState.get_travel_half_days("limassol", "piraeus") == 1)
-	assert(GameState.get_travel_half_days("limassol", "venice") == 2)
+	assert(GameState.get_travel_half_days("venice", "alexandria") == 2)
+	assert(GameState.get_travel_half_days("alexandria", "venice") == 2)
 	assert(GameState.get_travel_half_days("venice", "limassol") == 2)
+	assert(GameState.get_travel_half_days("venice", "istanbul") == 2)
+	assert(GameState.get_travel_half_days("venice", "beirut") == 2)
+	assert(GameState.get_travel_half_days("venice", "jaffa") == 2)
+	assert(GameState.get_travel_half_days("istanbul", "alexandria") == 2)
+	assert(GameState.get_travel_half_days("istanbul", "jaffa") == 2)
+	assert(GameState.get_travel_half_days("istanbul", "beirut") == 2)
+	assert(GameState.get_travel_half_days("piraeus", "jaffa") == 2)
+	assert(GameState.get_travel_half_days("beirut", "piraeus") == 2)
 	assert(GameState.get_travel_half_days("piraeus", "venice") == 1)
 	assert(GameState.get_travel_half_days("venice", "piraeus") == 1)
+	assert(GameState.get_travel_half_days("istanbul", "piraeus") == 1)
+	assert(GameState.get_travel_half_days("istanbul", "limassol") == 1)
+	assert(GameState.get_travel_half_days("alexandria", "piraeus") == 1)
+	assert(GameState.get_travel_half_days("jaffa", "alexandria") == 1)
+	assert(GameState.get_travel_half_days("jaffa", "beirut") == 1)
+	assert(GameState.get_travel_half_days("limassol", "beirut") == 1)
 	print("travel duration table OK")
 
-	# Two half-day Limassol legs in a row bank into exactly one full day-tick;
-	# a lone half-day leg never rolls a travel event (too short to matter),
-	# and prices/interest don't move on it either.
+	# Two half-day Limassol legs in a row bank into exactly one full day's
+	# worth of travel, but the resulting day-tick is deferred to evening
+	# rather than firing immediately on arrival: the player lands at the
+	# second port the same day (half_day_carry == 2), and sailing again is
+	# blocked until they rest -- only then does the day actually turn over.
+	# Every leg -- even a lone half-day hop -- gets its own shot at a travel
+	# event now, so a pirate encounter can interrupt any of these legs too.
 	GameState.new_game(21, "jaffa")
+	GameState.gold = 5000
 	var day_before: int = GameState.current_day
-	var wheat_price_before: int = GameState.get_price("limassol", "wheat")
 	GameState.start_travel("limassol")
+	var leg1_guard := 0
+	while not GameState.pending_encounter.is_empty() and leg1_guard < 20:
+		GameState.resolve_pirate_encounter("pay")
+		leg1_guard += 1
+	assert(leg1_guard < 20)
 	assert(GameState.current_port_id == "limassol")
 	assert(GameState.current_day == day_before)
-	assert(GameState.get_price("limassol", "wheat") == wheat_price_before)
+	assert(GameState.half_day_carry == 1)
 	GameState.start_travel("istanbul")
-	var half_day_guard := 0
-	while not GameState.pending_encounter.is_empty() and half_day_guard < 20:
+	var leg2_guard := 0
+	while not GameState.pending_encounter.is_empty() and leg2_guard < 20:
 		GameState.resolve_pirate_encounter("pay")
-		half_day_guard += 1
+		leg2_guard += 1
+	assert(leg2_guard < 20)
 	assert(GameState.current_port_id == "istanbul")
+	assert(GameState.current_day == day_before) # arrival is this same evening, not ticked yet
+	assert(GameState.half_day_carry == 2)
+	GameState.start_travel("limassol") # can't sail again this evening without resting first
+	assert(not GameState.is_traveling)
+	assert(GameState.current_port_id == "istanbul")
+	GameState.rest_at_port()
 	assert(GameState.current_day == day_before + 1)
+	assert(GameState.half_day_carry == 0)
 	print("half-day carry-over OK")
 
-	# Piraeus <-> Venice sails directly, half a day, no price movement.
+	# Piraeus <-> Venice sails directly, half a day -- still just one event
+	# roll for the whole hop.
 	GameState.new_game(21, "jaffa")
+	GameState.gold = 5000
 	GameState.current_port_id = "piraeus"
 	day_before = GameState.current_day
-	var silk_price_before: int = GameState.get_price("venice", "silk")
 	GameState.start_travel("venice")
+	var piraeus_venice_guard := 0
+	while not GameState.pending_encounter.is_empty() and piraeus_venice_guard < 20:
+		GameState.resolve_pirate_encounter("pay")
+		piraeus_venice_guard += 1
+	assert(piraeus_venice_guard < 20)
 	assert(GameState.current_port_id == "venice")
 	assert(GameState.current_day == day_before)
-	assert(GameState.get_price("venice", "silk") == silk_price_before)
 	print("Piraeus<->Venice direct crossing OK")
 
-	# A regular one-day leg always resolves in exactly one day-tick.
+	# A full-day leg lands the ship the same evening it departed, not a day
+	# later -- goods must still be tradable there before the day turns over.
+	# (Regression check: this used to tick the day automatically on arrival,
+	# with no explicit rest.)
 	GameState.new_game(21, "jaffa")
 	day_before = GameState.current_day
-	GameState.start_travel("beirut")
+	var istanbul_wheat_before2: int = GameState.get_price("istanbul", "wheat")
+	GameState.start_travel("istanbul")
 	var regular_guard := 0
 	while not GameState.pending_encounter.is_empty() and regular_guard < 20:
 		GameState.resolve_pirate_encounter("pay")
 		regular_guard += 1
-	assert(GameState.current_port_id == "beirut")
+	assert(GameState.current_port_id == "istanbul")
+	assert(GameState.current_day == day_before) # still the same day -- arrival is this evening
+	assert(GameState.half_day_carry == 2)
+	assert(GameState.get_price("istanbul", "wheat") == istanbul_wheat_before2) # no day-tick yet, no price move
+	GameState.start_travel("alexandria") # can't sail again this evening without resting first
+	assert(not GameState.is_traveling)
+	GameState.rest_at_port()
 	assert(GameState.current_day == day_before + 1)
-	print("regular one-day leg OK")
+	assert(GameState.half_day_carry == 0)
+	print("full-day leg OK")
 
 	# Market demand rumors always push the destination price UP, never down.
 	GameState.new_game(21, "jaffa")
@@ -160,13 +185,32 @@ func _initialize() -> void:
 	assert(GameState.current_day == day_before + 1)
 	print("rest at port OK")
 
-	# Overload mechanics in isolation
+	# Overload mechanics: purchases are unlimited by hold space (only by
+	# gold) -- the ship just can't set sail carrying more than 150% of
+	# nominal capacity, and that cap is enforced only at start_travel.
 	GameState.new_game(21, "jaffa")
-	GameState.gold = 5000
-	assert(not GameState.can_buy("wheat", GameState.get_overload_capacity() + 1))
-	assert(GameState.buy("wheat", GameState.get_overload_capacity()))
+	GameState.gold = 20000
+	var deep_overload_qty: int = GameState.ship_capacity * 4 # 400% of capacity
+	assert(GameState.can_buy("wheat", deep_overload_qty))
+	assert(GameState.buy("wheat", deep_overload_qty))
+	assert(GameState.get_cargo_used() == deep_overload_qty)
 	assert(GameState.is_overloaded())
 	assert(GameState.get_overload_ratio() > 0.99)
+	# Staying docked (resting) while deeply overloaded is fine.
+	var overload_day_before: int = GameState.current_day
+	GameState.rest_at_port()
+	assert(GameState.current_day == overload_day_before + 1)
+	assert(GameState.get_cargo_used() > GameState.get_overload_capacity()) # still well past 150%
+	# But the ship can't set sail this loaded -- start_travel is a no-op above 150%.
+	GameState.start_travel("alexandria")
+	assert(not GameState.is_traveling)
+	assert(GameState.current_port_id == "jaffa")
+	# Sell back down to at most 150% of capacity and sailing works again.
+	var sell_qty: int = GameState.get_cargo_used() - GameState.get_overload_capacity()
+	assert(GameState.sell("wheat", sell_qty))
+	assert(GameState.get_cargo_used() == GameState.get_overload_capacity())
+	GameState.start_travel("alexandria")
+	assert(GameState.is_traveling or GameState.current_port_id == "alexandria")
 	print("overload capacity OK")
 
 	# Bank

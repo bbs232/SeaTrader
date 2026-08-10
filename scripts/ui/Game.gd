@@ -1,5 +1,7 @@
 extends Control
 
+const SHIP_ICON_SIZE := Vector2(90, 90)
+
 var map_layer: Control
 var hud_layer: Control
 ## A real stack, not a single slot: GameState can resolve a whole voyage
@@ -12,6 +14,7 @@ var port_buttons: Dictionary = {} # port_id -> TextureButton
 var ship_icon: TextureRect
 var hud_label: Label
 var dock_panel: PanelContainer
+var map_bg: TextureRect
 
 var ship_tween: Tween
 var is_animating_travel: bool = false
@@ -19,13 +22,15 @@ var is_resting: bool = false
 
 func _ready() -> void:
 	UIUtil.apply_rtl(self)
+	theme = UIUtil.build_theme()
 	GameState.arrived_at_port.connect(_on_arrived_at_port)
 	GameState.pirate_encounter_started.connect(_on_pirate_encounter_started)
 	GameState.game_ended.connect(_on_game_ended)
 	_build_ui()
 
 func _build_ui() -> void:
-	add_child(UIUtil.make_bg("res://assets/art/map_bg.svg"))
+	map_bg = UIUtil.make_bg("res://assets/art/map_bg.svg")
+	add_child(map_bg)
 
 	map_layer = Control.new()
 	map_layer.set_anchors_preset(Control.PRESET_FULL_RECT)
@@ -72,7 +77,7 @@ func _build_map() -> void:
 	ship_icon.texture = load("res://assets/art/ship.svg")
 	ship_icon.mouse_filter = Control.MOUSE_FILTER_IGNORE
 	map_layer.add_child(ship_icon)
-	ship_icon.size = Vector2(36, 36)
+	ship_icon.size = SHIP_ICON_SIZE
 
 func _build_hud() -> void:
 	var bg := UIUtil.make_panel()
@@ -128,38 +133,67 @@ func _build_dock() -> void:
 func _refresh_all() -> void:
 	var port := GameState.get_port(GameState.current_port_id)
 	var port_name := tr(port.name_key) if port else "?"
-	hud_label.text = "%s %d/%d   |   %s: %d   |   %s: %d/%d   |   %s: %d   |   %s" % [
-		tr("hud_day"), GameState.current_day, GameState.game_length_days,
-		tr("hud_gold"), GameState.gold,
+	hud_label.text = "%s %d/%d (%s)   |   %s: %s   |   %s: %d/%d   |   %s: %s   |   %s" % [
+		tr("hud_day"), GameState.current_day, GameState.game_length_days, tr(_time_of_day_key()),
+		tr("hud_gold"), UIUtil.format_gold(GameState.gold),
 		tr("hud_cargo"), GameState.get_cargo_used(), GameState.ship_capacity,
-		tr("hud_networth"), GameState.get_net_worth(),
+		tr("hud_networth"), UIUtil.format_gold(GameState.get_net_worth()),
 		port_name,
 	]
+	map_bg.modulate = _time_of_day_tint()
 	if port and not is_animating_travel:
-		ship_icon.position = port.map_position - Vector2(18, 18)
+		ship_icon.position = port.map_position - SHIP_ICON_SIZE / 2
 	dock_panel.visible = not GameState.is_traveling and not is_animating_travel and not is_resting
 	_update_port_marker_states()
 
-## Dims ports that can't be reached directly from here (Piraeus/Venice
-## without a Limassol/Istanbul/Alexandria stopover) so the restriction is
-## visible on the map before the player even clicks.
+## Derives a lightweight sense of time of day from state that already exists,
+## rather than tracking a separate persisted clock:
+## - "Evening" covers the moments time is visibly passing (ship gliding at
+##   sea, or the rest fade-to-dark) so the transition itself reads as dusk --
+##   and also a settled arrival that used up today's whole travel budget
+##   (half_day_carry == 2): the player can still trade, but can't sail again
+##   until they rest.
+## - Once settled at a port, half_day_carry otherwise tells us whether a
+##   half-day-length hop already happened today without ticking the day over
+##   (1, Noon) or the day just started fresh (0, Morning).
+func _time_of_day_key() -> String:
+	if is_animating_travel or is_resting or GameState.half_day_carry >= 2:
+		return "hud_time_evening"
+	if GameState.half_day_carry == 0:
+		return "hud_time_morning"
+	return "hud_time_noon"
+
+func _time_of_day_tint() -> Color:
+	match _time_of_day_key():
+		"hud_time_evening":
+			return Color(0.95, 0.75, 0.65)
+		"hud_time_noon":
+			return Color(1.0, 1.0, 1.0)
+		_:
+			return Color(1.0, 0.97, 0.9)
+
+## Dims every other port once the day's travel budget is spent
+## (half_day_carry == 2) -- sailing again has to wait for Rest.
 func _update_port_marker_states() -> void:
 	for port_id in port_buttons.keys():
 		var btn: TextureButton = port_buttons[port_id]
 		if port_id == GameState.current_port_id:
 			btn.modulate = Color(1, 1, 1, 1)
-		elif GameState.can_travel_directly(GameState.current_port_id, port_id):
-			btn.modulate = Color(1, 1, 1, 1)
-		else:
+		elif GameState.half_day_carry >= 2:
 			btn.modulate = Color(1, 1, 1, 0.4)
+		else:
+			btn.modulate = Color(1, 1, 1, 1)
 
 func _on_port_marker_pressed(port_id: String) -> void:
 	if GameState.is_traveling or is_animating_travel or is_resting:
 		return
 	if port_id == GameState.current_port_id:
 		return
-	if not GameState.can_travel_directly(GameState.current_port_id, port_id):
-		_show_message(tr("route_blocked"))
+	if GameState.half_day_carry >= 2:
+		_show_message(tr("must_rest_evening"))
+		return
+	if GameState.get_cargo_used() > GameState.get_overload_capacity():
+		_show_message(tr("must_sell_overload"))
 		return
 	_open_travel_confirm(port_id)
 
@@ -169,15 +203,19 @@ func _on_rest_pressed() -> void:
 	if GameState.is_traveling or is_animating_travel or is_resting:
 		return
 	is_resting = true
-	GameState.rest_at_port()
+	_refresh_all()
+	var rest_result := GameState.rest_at_port()
 	if GameState.current_day > GameState.game_length_days:
 		return # the game just ended; game_ended already handles the scene change
-	_play_rest_animation()
+	_play_rest_animation(rest_result)
 
 ## No ship movement to animate here (the player stays put), so a day passing
 ## is shown as a brief fade-to-dark-and-back with a "resting" caption; the
 ## HUD (new day, updated prices) only becomes visible once it fades back in.
-func _play_rest_animation() -> void:
+## If resting turned up a notable overnight price swing and/or a warehouse
+## mishap, a combined "morning news" message follows right after the fade,
+## once the HUD is visible again.
+func _play_rest_animation(rest_result: Dictionary = {}) -> void:
 	dock_panel.visible = false
 
 	var overlay := ColorRect.new()
@@ -204,7 +242,26 @@ func _play_rest_animation() -> void:
 		overlay.queue_free()
 		is_resting = false
 		_refresh_all()
+		var lines: Array = []
+		var price_change: Dictionary = rest_result.get("price_change", {})
+		if not price_change.is_empty():
+			lines.append(_format_notable_price_change(price_change))
+		var warehouse: Dictionary = rest_result.get("warehouse", {})
+		if not warehouse.is_empty():
+			lines.append(_format_log_entry(warehouse))
+		if not lines.is_empty():
+			_show_message("\n".join(lines))
 	)
+
+## Formats the "morning news" line for a notable overnight price swing found
+## by GameState.rest_at_port (see _find_notable_price_change).
+func _format_notable_price_change(details: Dictionary) -> String:
+	var good := GameState.get_good(details.get("good_id", ""))
+	var port := GameState.get_port(details.get("port_id", ""))
+	if good == null or port == null:
+		return ""
+	var key := "rest_notable_price_drop" if details.get("ratio", 0.0) < 0.0 else "rest_notable_price_rise"
+	return tr(key) % [tr(good.name_key), tr(port.name_key)]
 
 ## --- Ship travel animation ---
 ##
@@ -218,13 +275,14 @@ func _play_rest_animation() -> void:
 ## no matter how many encounters happened along the route.
 
 func _animate_ship_to(map_pos: Vector2, fraction: float = 1.0) -> void:
-	var target := map_pos - Vector2(18, 18)
+	var target := map_pos - SHIP_ICON_SIZE / 2
 	var start: Vector2 = ship_icon.position
 	var leg_target: Vector2 = start.lerp(target, fraction)
 	var duration: float = clamp(start.distance_to(leg_target) / 220.0, 0.4, 2.2)
 
 	is_animating_travel = true
 	dock_panel.visible = false
+	_refresh_all()
 	if ship_tween:
 		ship_tween.kill()
 	ship_tween = create_tween()
@@ -320,6 +378,62 @@ func _show_confirm(text: String, on_confirm: Callable) -> void:
 	btn_cancel.pressed.connect(func(): dim.queue_free())
 	vbox.add_child(btn_cancel)
 
+## Stacks a small numeric-entry dialog on top of the current overlay, used by
+## the trade panel's quantity button instead of a raw SpinBox -- a SpinBox's
+## internal LineEdit only commits typed text on blur/Enter, which a fast tap
+## straight to Buy/Sell can race and silently ignore. This dialog only ever
+## reports a value back via on_set when the player explicitly confirms, so
+## there's no ambiguous partially-typed state to race against.
+func _open_quantity_dialog(current: int, on_set: Callable) -> void:
+	if overlay_stack.is_empty():
+		return
+	var layer: CanvasLayer = overlay_stack.back()
+
+	var dim := ColorRect.new()
+	dim.color = Color(0, 0, 0, 0.55)
+	dim.set_anchors_preset(Control.PRESET_FULL_RECT)
+	layer.add_child(dim)
+
+	var center := CenterContainer.new()
+	center.set_anchors_preset(Control.PRESET_FULL_RECT)
+	dim.add_child(center)
+
+	var panel := UIUtil.make_panel()
+	center.add_child(panel)
+
+	var vbox := VBoxContainer.new()
+	vbox.custom_minimum_size = Vector2(320, 0)
+	vbox.add_theme_constant_override("separation", 12)
+	panel.add_child(vbox)
+
+	vbox.add_child(UIUtil.make_title(tr("quantity_dialog_title"), 20))
+
+	var edit := LineEdit.new()
+	edit.text = str(current)
+	edit.custom_minimum_size = Vector2(0, 48)
+	edit.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
+	edit.select_all_on_focus = true
+	vbox.add_child(edit)
+
+	var apply := func():
+		var qty := int(edit.text.strip_edges())
+		if qty < 1:
+			qty = 1
+		dim.queue_free()
+		on_set.call(qty)
+
+	edit.text_submitted.connect(func(_new_text: String): apply.call())
+
+	var btn_ok := UIUtil.make_button(tr("confirm"))
+	btn_ok.pressed.connect(apply)
+	vbox.add_child(btn_ok)
+
+	var btn_cancel2 := UIUtil.make_button(tr("cancel"))
+	btn_cancel2.pressed.connect(func(): dim.queue_free())
+	vbox.add_child(btn_cancel2)
+
+	edit.call_deferred("grab_focus")
+
 ## Confirms a purchase before it happens, surfacing the overload warning
 ## up front (in the confirmation itself) whenever this purchase would push
 ## the ship past its nominal capacity, rather than only after the fact.
@@ -327,7 +441,7 @@ func _confirm_and_buy(good: Good, qty: int, on_bought: Callable) -> void:
 	if qty <= 0:
 		return
 	var cost := GameState.get_price(GameState.current_port_id, good.id) * qty
-	var msg := tr("confirm_buy_max") % [qty, tr(good.name_key), cost]
+	var msg := tr("confirm_buy_max") % [qty, tr(good.name_key), UIUtil.format_gold(cost)]
 	if GameState.get_cargo_used() + qty > GameState.ship_capacity:
 		msg += "\n" + tr("confirm_overload_warning")
 	_show_confirm(msg, func():
@@ -349,8 +463,6 @@ func _open_travel_confirm(port_id: String) -> void:
 	var days_label := tr("travel_half_day")
 	if half_days == 2:
 		days_label = tr("travel_one_day")
-	elif half_days >= 4:
-		days_label = tr("travel_two_days")
 
 	vbox.add_child(UIUtil.make_title(tr(dest.name_key), 26))
 	vbox.add_child(UIUtil.make_label(tr("travel_estimate") % days_label, 18))
@@ -371,7 +483,7 @@ func _open_travel_confirm(port_id: String) -> void:
 func _open_trade_panel() -> void:
 	var panel := _open_overlay()
 	var vbox := VBoxContainer.new()
-	vbox.custom_minimum_size = Vector2(760, 0)
+	vbox.custom_minimum_size = Vector2(830, 0)
 	vbox.add_theme_constant_override("separation", 10)
 	panel.add_child(vbox)
 
@@ -383,8 +495,8 @@ func _open_trade_panel() -> void:
 	vbox.add_child(overload_label)
 
 	var refresh_status := func():
-		status_label.text = "%s: %d   |   %s: %d/%d" % [
-			tr("hud_gold"), GameState.gold, tr("hud_cargo"), GameState.get_cargo_used(), GameState.ship_capacity]
+		status_label.text = "%s: %s   |   %s: %d/%d" % [
+			tr("hud_gold"), UIUtil.format_gold(GameState.gold), tr("hud_cargo"), GameState.get_cargo_used(), GameState.ship_capacity]
 		overload_label.text = tr("trade_overload_warning") if GameState.is_overloaded() else ""
 
 	refresh_status.call()
@@ -406,12 +518,14 @@ func _open_trade_panel() -> void:
 		owned_label.custom_minimum_size = Vector2(90, 0)
 		row.add_child(owned_label)
 
-		var amount := SpinBox.new()
-		amount.min_value = 1
-		amount.max_value = 9999
-		amount.value = 1
-		amount.custom_minimum_size = Vector2(80, 0)
-		row.add_child(amount)
+		# A box, not a plain int, so the nested lambdas below (buy/sell/max/
+		# quantity dialog) all mutate the same live quantity regardless of
+		# GDScript lambda capture semantics -- an Array is captured by
+		# reference, a plain local int would not reliably be.
+		var qty_box: Array = [1]
+		var btn_amount := UIUtil.make_button(str(qty_box[0]), 44, 16)
+		btn_amount.custom_minimum_size = Vector2(80, 44)
+		row.add_child(btn_amount)
 
 		var btn_buy := UIUtil.make_button(tr("trade_buy"), 44, 16)
 		btn_buy.custom_minimum_size = Vector2(70, 44)
@@ -420,6 +534,10 @@ func _open_trade_panel() -> void:
 		var btn_buy_max := UIUtil.make_button(tr("trade_max"), 44, 16)
 		btn_buy_max.custom_minimum_size = Vector2(60, 44)
 		row.add_child(btn_buy_max)
+
+		var btn_buy_max_capacity := UIUtil.make_button(tr("trade_max_capacity"), 44, 16)
+		btn_buy_max_capacity.custom_minimum_size = Vector2(60, 44)
+		row.add_child(btn_buy_max_capacity)
 
 		var btn_sell := UIUtil.make_button(tr("trade_sell"), 44, 16)
 		btn_sell.custom_minimum_size = Vector2(70, 44)
@@ -431,19 +549,26 @@ func _open_trade_panel() -> void:
 
 		var refresh_row := func():
 			var price := GameState.get_price(GameState.current_port_id, good.id)
-			price_label.text = "%s: %d" % [tr("trade_price"), price]
+			price_label.text = "%s: %s" % [tr("trade_price"), UIUtil.format_gold(price)]
 			var owned: int = GameState.cargo.get(good.id, 0)
 			owned_label.text = "%s: %d" % [tr("trade_owned"), owned]
 			var max_buy := GameState.get_max_affordable(good.id)
 			btn_buy.disabled = max_buy <= 0
 			btn_buy_max.disabled = max_buy <= 0
+			btn_buy_max_capacity.disabled = GameState.get_max_sailable_affordable(good.id) <= 0
 			btn_sell.disabled = owned <= 0
 			btn_sell_all.disabled = owned <= 0
 
 		refresh_row.call()
 
+		btn_amount.pressed.connect(func():
+			_open_quantity_dialog(qty_box[0], func(new_qty: int):
+				qty_box[0] = new_qty
+				btn_amount.text = str(new_qty)
+			)
+		)
 		btn_buy.pressed.connect(func():
-			_confirm_and_buy(good, int(amount.value), func():
+			_confirm_and_buy(good, qty_box[0], func():
 				refresh_row.call()
 				refresh_status.call()
 			)
@@ -451,13 +576,23 @@ func _open_trade_panel() -> void:
 		btn_buy_max.pressed.connect(func():
 			var max_buy := GameState.get_max_affordable(good.id)
 			_confirm_and_buy(good, max_buy, func():
-				amount.value = max_buy
+				qty_box[0] = max_buy
+				btn_amount.text = str(max_buy)
+				refresh_row.call()
+				refresh_status.call()
+			)
+		)
+		btn_buy_max_capacity.pressed.connect(func():
+			var max_buy := GameState.get_max_sailable_affordable(good.id)
+			_confirm_and_buy(good, max_buy, func():
+				qty_box[0] = max_buy
+				btn_amount.text = str(max_buy)
 				refresh_row.call()
 				refresh_status.call()
 			)
 		)
 		btn_sell.pressed.connect(func():
-			if GameState.sell(good.id, int(amount.value)):
+			if GameState.sell(good.id, qty_box[0]):
 				refresh_row.call()
 				refresh_status.call()
 		)
@@ -466,9 +601,10 @@ func _open_trade_panel() -> void:
 			if owned <= 0:
 				return
 			var revenue := GameState.get_price(GameState.current_port_id, good.id) * owned
-			_show_confirm(tr("confirm_sell_all") % [owned, tr(good.name_key), revenue], func():
+			_show_confirm(tr("confirm_sell_all") % [owned, tr(good.name_key), UIUtil.format_gold(revenue)], func():
 				if GameState.sell(good.id, owned):
-					amount.value = 1
+					qty_box[0] = 1
+					btn_amount.text = "1"
 					refresh_row.call()
 					refresh_status.call()
 			)
@@ -525,11 +661,11 @@ func _open_bank_panel() -> void:
 	grid.add_child(btn_repay_max)
 
 	var refresh_info := func():
-		info_label.text = "%s: %d\n%s: %d\n%s: %d\n%s: %d" % [
-			tr("hud_gold"), GameState.gold,
-			tr("bank_savings"), int(GameState.savings),
-			tr("bank_loan"), int(GameState.loan),
-			tr("bank_max_loan"), GameState.bank_max_loan(),
+		info_label.text = "%s: %s\n%s: %s\n%s: %s\n%s: %s" % [
+			tr("hud_gold"), UIUtil.format_gold(GameState.gold),
+			tr("bank_savings"), UIUtil.format_gold(int(GameState.savings)),
+			tr("bank_loan"), UIUtil.format_gold(int(GameState.loan)),
+			tr("bank_max_loan"), UIUtil.format_gold(GameState.bank_max_loan()),
 		]
 		btn_deposit.disabled = GameState.gold <= 0
 		btn_deposit_max.disabled = GameState.gold <= 0
@@ -597,8 +733,12 @@ func _open_shipyard_panel() -> void:
 		vbox.add_child(row)
 
 		var label := UIUtil.make_label(tr(up.name_key), 18)
-		label.custom_minimum_size = Vector2(220, 0)
+		label.custom_minimum_size = Vector2(190, 0)
 		row.add_child(label)
+
+		var amount_label := UIUtil.make_label("", 14, Color("#CFE8F2"))
+		amount_label.custom_minimum_size = Vector2(120, 0)
+		row.add_child(amount_label)
 
 		var status_label := UIUtil.make_label("", 16)
 		status_label.custom_minimum_size = Vector2(90, 0)
@@ -610,12 +750,18 @@ func _open_shipyard_panel() -> void:
 		var refresh_row := func():
 			if GameState.is_upgrade_owned(up.id):
 				status_label.text = tr("shipyard_owned")
+				amount_label.text = tr("shipyard_amount_plain") % up.amount
 				btn_buy.disabled = true
 			elif up.requires_id != "" and not GameState.is_upgrade_owned(up.requires_id):
 				status_label.text = tr("shipyard_locked")
+				amount_label.text = tr("shipyard_amount_plain") % up.amount
 				btn_buy.disabled = true
 			else:
 				status_label.text = ""
+				if up.kind == ShipUpgrade.Kind.CARGO:
+					amount_label.text = tr("shipyard_amount_cargo") % [up.amount, GameState.ship_capacity + up.amount]
+				else:
+					amount_label.text = tr("shipyard_amount_plain") % up.amount
 				btn_buy.disabled = not GameState.can_buy_upgrade(up.id)
 
 		refresh_row.call()
@@ -623,6 +769,39 @@ func _open_shipyard_panel() -> void:
 			if GameState.buy_upgrade(up.id):
 				refresh_row.call()
 		)
+
+	var sep := HSeparator.new()
+	vbox.add_child(sep)
+
+	var sec_row := HBoxContainer.new()
+	sec_row.add_theme_constant_override("separation", 10)
+	vbox.add_child(sec_row)
+
+	var sec_label := UIUtil.make_label(tr("shipyard_security_ships"), 18)
+	sec_label.custom_minimum_size = Vector2(220, 0)
+	sec_row.add_child(sec_label)
+
+	var sec_status := UIUtil.make_label("", 16)
+	sec_status.custom_minimum_size = Vector2(90, 0)
+	sec_row.add_child(sec_status)
+
+	var btn_hire := UIUtil.make_button("", 44, 16)
+	sec_row.add_child(btn_hire)
+
+	var refresh_sec := func():
+		sec_status.text = tr("shipyard_security_owned") % GameState.security_ships
+		btn_hire.text = tr("shipyard_hire") % GameState.get_security_ship_cost()
+		btn_hire.disabled = not GameState.can_hire_security_ship()
+
+	refresh_sec.call()
+	btn_hire.pressed.connect(func():
+		if GameState.hire_security_ship():
+			refresh_sec.call()
+	)
+
+	var sec_hint := UIUtil.make_label(tr("shipyard_security_hint"), 13, Color("#CFE8F2"))
+	sec_hint.autowrap_mode = TextServer.AUTOWRAP_WORD
+	vbox.add_child(sec_hint)
 
 	var btn_close := UIUtil.make_button(tr("close"))
 	btn_close.pressed.connect(_close_overlay)
@@ -763,15 +942,19 @@ func _resolve_pirates(choice: String, panel: PanelContainer) -> void:
 func _format_pirate_result(result: Dictionary) -> String:
 	match result.get("outcome", ""):
 		"won":
-			return tr("log_pirates_won") % result.get("bounty", 0)
+			var text := tr("log_pirates_won") % UIUtil.format_gold(result.get("bounty", 0))
+			var loot: Dictionary = result.get("loot", {})
+			if not loot.is_empty():
+				text += "\n" + tr("log_pirates_won_goods") % _format_goods_list(loot)
+			return text
 		"lost":
 			return tr("log_pirates_lost")
 		"escaped":
 			return tr("log_pirates_escaped")
 		"caught":
-			return tr("log_pirates_caught") % result.get("ransom", 0)
+			return tr("log_pirates_caught") % UIUtil.format_gold(result.get("ransom", 0))
 		"paid":
-			return tr("log_pirates_paid") % result.get("ransom", 0)
+			return tr("log_pirates_paid") % UIUtil.format_gold(result.get("ransom", 0))
 		_:
 			return ""
 
@@ -804,22 +987,28 @@ func _format_log_entry(entry: Dictionary) -> String:
 			var lost: Dictionary = entry.get("lost_goods", {})
 			var repair_cost: int = entry.get("repair_cost", 0)
 			if lost.is_empty():
-				return tr("log_aground_none") % repair_cost
-			return tr("log_aground_loss") % [_format_goods_list(lost), repair_cost]
+				return tr("log_aground_none") % UIUtil.format_gold(repair_cost)
+			return tr("log_aground_loss") % [_format_goods_list(lost), UIUtil.format_gold(repair_cost)]
 		"overload":
 			var lost: Dictionary = entry.get("lost_goods", {})
 			var repair_cost: int = entry.get("repair_cost", 0)
 			if entry.get("severe", false):
-				return tr("log_overload_severe") % [_format_goods_list(lost), repair_cost]
+				return tr("log_overload_severe") % [_format_goods_list(lost), UIUtil.format_gold(repair_cost)]
 			return tr("log_overload_minor") % _format_goods_list(lost)
 		"fair_wind":
 			return tr("log_fair_wind")
 		"market_demand":
 			var good := GameState.get_good(entry.get("good_id", ""))
 			var good_name := tr(good.name_key) if good else "?"
-			return tr("log_market_demand") % [good_name, entry.get("new_price", 0)]
+			return tr("log_market_demand") % [good_name, UIUtil.format_gold(entry.get("new_price", 0))]
 		"pirates":
 			return _format_pirate_result(entry)
+		"warehouse":
+			var lost: Dictionary = entry.get("lost_goods", {})
+			if lost.is_empty():
+				return ""
+			var key := "log_warehouse_fire" if entry.get("cause", "fire") == "fire" else "log_warehouse_theft"
+			return tr(key) % _format_goods_list(lost)
 		_:
 			return ""
 

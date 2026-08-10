@@ -18,6 +18,7 @@ func save_game() -> void:
 		"ship_capacity": GameState.ship_capacity,
 		"ship_speed_points": GameState.ship_speed_points,
 		"ship_defense_points": GameState.ship_defense_points,
+		"security_ships": GameState.security_ships,
 		"owned_upgrades": GameState.owned_upgrades,
 		"loan": GameState.loan,
 		"savings": GameState.savings,
@@ -49,6 +50,7 @@ func load_game() -> bool:
 	GameState.ship_capacity = parsed.get("ship_capacity", GameState.STARTING_CAPACITY)
 	GameState.ship_speed_points = parsed.get("ship_speed_points", 0)
 	GameState.ship_defense_points = parsed.get("ship_defense_points", 0)
+	GameState.security_ships = parsed.get("security_ships", 0)
 	var owned: Array[String] = []
 	for u in parsed.get("owned_upgrades", []):
 		owned.append(String(u))
@@ -82,7 +84,7 @@ func add_highscore(player_name: String, net_worth: int) -> void:
 	scores.append({
 		"name": player_name,
 		"net_worth": net_worth,
-		"date": Time.get_date_string_from_system(),
+		"date": Time.get_date_string_from_system() + " " + Time.get_time_string_from_system().substr(0, 5),
 	})
 	scores.sort_custom(func(a, b): return a["net_worth"] > b["net_worth"])
 	if scores.size() > MAX_HIGHSCORES:

@@ -4,9 +4,9 @@
 
 [resource]
 script = ExtResource("1")
-id = "cargo1"
-name_key = "upgrade_cargo1"
+id = "cargo3"
+name_key = "upgrade_cargo3"
 kind = 0
-cost = 870
-amount = 1915
-requires_id = ""
+cost = 1950
+amount = 8000
+requires_id = "cargo2"

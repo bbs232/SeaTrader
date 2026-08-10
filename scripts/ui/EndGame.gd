@@ -6,6 +6,7 @@ var save_button: Button
 
 func _ready() -> void:
 	UIUtil.apply_rtl(self)
+	theme = UIUtil.build_theme()
 	SaveManager.delete_save()
 	_build_ui()
 
@@ -27,13 +28,13 @@ func _build_ui() -> void:
 	vbox.add_child(UIUtil.make_title(tr("endgame_title"), 32))
 
 	var net_worth := GameState.get_net_worth()
-	var summary := "%s: %d\n%s: %d\n%s: %d\n%s: %d\n%s: %d\n\n%s: %d" % [
-		tr("hud_gold"), GameState.gold,
-		tr("endgame_cargo_value"), GameState.get_cargo_value_at_current_port(),
-		tr("bank_savings"), int(GameState.savings),
-		tr("bank_loan"), int(GameState.loan),
+	var summary := "%s: %s\n%s: %s\n%s: %s\n%s: %s\n%s: %d\n\n%s: %s" % [
+		tr("hud_gold"), UIUtil.format_gold(GameState.gold),
+		tr("endgame_cargo_value"), UIUtil.format_gold(GameState.get_cargo_value_at_current_port()),
+		tr("bank_savings"), UIUtil.format_gold(int(GameState.savings)),
+		tr("bank_loan"), UIUtil.format_gold(int(GameState.loan)),
 		tr("endgame_days"), GameState.game_length_days,
-		tr("endgame_networth"), net_worth,
+		tr("endgame_networth"), UIUtil.format_gold(net_worth),
 	]
 	vbox.add_child(UIUtil.make_label(summary, 18))
 

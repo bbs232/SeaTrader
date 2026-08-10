@@ -6,6 +6,8 @@ menu_continue,המשך משחק,Continue
 menu_highscores,שיאים,High Scores
 menu_language,שנה שפה,Change Language
 menu_quit,יציאה,Quit
+menu_refresh,רענן משחק,Refresh Game
+version_label,גרסה %s,Version %s
 new_game_pick_length,בחר אורך משחק,Choose Game Length
 length_short,קצר (10 ימים),Short (10 days)
 length_medium,בינוני (21 ימים),Medium (21 days)
@@ -25,22 +27,27 @@ hud_day,יום,Day
 hud_gold,זהב,Gold
 hud_cargo,מטען,Cargo
 hud_networth,הון נקי,Net Worth
+hud_time_morning,בוקר,Morning
+hud_time_noon,צהריים,Noon
+hud_time_evening,ערב,Evening
 travel_estimate,משך ההפלגה המשוער: %s,Estimated voyage: %s
 travel_half_day,חצי יום,half a day
 travel_one_day,יום אחד,1 day
-travel_two_days,יומיים,2 days
 travel_confirm,הפלג,Set Sail
-route_blocked,אי אפשר להפליג ישירות לשם או משם: כדי להגיע לפיראוס או לונציה (או לחזור מהם) חובה לעצור קודם בלימסול, באיסטנבול או באלכסנדריה.,Cannot sail there directly: reaching (or returning from) Piraeus or Venice requires a stop first at Limassol, Istanbul or Alexandria.
+must_rest_evening,הצוות מותש מהיום; יש לנוח לפני שיוצאים להפלגה נוספת.,The crew is worn out from today; rest before setting sail again.
+must_sell_overload,הספינה עמוסה מדי להפלגה; יש למכור מטען עד 150% מקיבולת המחסן לפני שיוצאים לדרך.,The ship is too loaded to sail; sell cargo down to 150% of hold capacity before setting sail.
 menu_rules,חוקי המשחק,Game Rules
 rules_title,חוקי המשחק,Game Rules
 trade_title,מסחר ב-%s,Trade at %s
 trade_buy,קנה,Buy
 trade_sell,מכור,Sell
-trade_max,מקס׳,Max
+trade_max,מקס׳ זהב,Max Gold
+trade_max_capacity,מקס׳ קיבולת,Max Cap.
+quantity_dialog_title,הזן כמות,Enter Quantity
 trade_all,הכל,All
 confirm,אשר,Confirm
-confirm_buy_max,לקנות %d %s תמורת %d זהב?,Buy %d %s for %d gold?
-confirm_sell_all,למכור %d %s תמורת %d זהב?,Sell %d %s for %d gold?
+confirm_buy_max,לקנות %d %s תמורת %s זהב?,Buy %d %s for %s gold?
+confirm_sell_all,למכור %d %s תמורת %s זהב?,Sell %d %s for %s gold?
 confirm_overload_warning,⚠ הספינה תיטען מעבר לקיבולת הרגילה — סיכון לאובדן מטען או נזק לספינה בדרך,⚠ The ship will be loaded beyond nominal capacity — risk of losing cargo or ship damage en route
 trade_price,מחיר,Price
 trade_owned,ברשותך,Owned
@@ -58,7 +65,7 @@ bank_withdraw_all,משוך הכל,Withdraw All
 bank_borrow_max,לווה מקס׳,Borrow Max
 bank_repay_all,החזר הכל,Repay All
 shipyard_title,המספנה,The Shipyard
-shipyard_buy,קנה (%d),Buy (%d)
+shipyard_buy,קנה (%s),Buy (%s)
 shipyard_owned,ברשותך,Owned
 shipyard_locked,נעול,Locked
 menu_resume,חזרה למשחק,Resume
@@ -68,20 +75,23 @@ pirates_desc,ספינת פיראטים מתקרבת. מה תעשה?,A pirate shi
 pirates_fight,הילחם,Fight
 pirates_flee,ברח,Flee
 pirates_pay,שלם כופר,Pay Ransom
-log_pirates_won,ניצחת את הפיראטים ושדדת מהם %d זהב!,You defeated the pirates and looted %d gold!
+log_pirates_won,ניצחת את הפיראטים ושדדת מהם %s זהב!,You defeated the pirates and looted %s gold!
+log_pirates_won_goods,וגם תפסת מהמטען שלהם: %s,And also seized from their cargo: %s
 log_pirates_lost,הפסדת בקרב והפיראטים שדדו חלק מהמטען שלך.,You lost the fight and the pirates looted some of your cargo.
 log_pirates_escaped,הצלחת לברוח מהפיראטים!,You escaped the pirates!
-log_pirates_caught,הפיראטים תפסו אותך ולקחו %d זהב.,The pirates caught you and took %d gold.
-log_pirates_paid,שילמת %d זהב כופר לפיראטים.,You paid %d gold ransom to the pirates.
+log_pirates_caught,הפיראטים תפסו אותך ולקחו %s זהב.,The pirates caught you and took %s gold.
+log_pirates_paid,שילמת %s זהב כופר לפיראטים.,You paid %s gold ransom to the pirates.
 travel_uneventful,ההפלגה עברה בשלום.,The voyage passed without incident.
 log_storm_none,סערה עברה לידכם ללא נזק.,A storm passed nearby without damage.
 log_storm_loss,סערה פגעה בספינה! איבדת: %s,A storm struck the ship! You lost: %s
-log_aground_none,עליתם על שרטון אך יצאתם בשלום (תיקון: %d זהב),You ran aground but got off safely (repairs: %d gold)
-log_aground_loss,עליתם על שרטון! איבדתם: %s (תיקון: %d זהב),You ran aground! Lost: %s (repairs: %d gold)
+log_aground_none,עליתם על שרטון אך יצאתם בשלום (תיקון: %s זהב),You ran aground but got off safely (repairs: %s gold)
+log_aground_loss,עליתם על שרטון! איבדתם: %s (תיקון: %s זהב),You ran aground! Lost: %s (repairs: %s gold)
 log_overload_minor,הצוות זרק חלק מהמטען העודף לים כדי לייצב את הספינה: %s,The crew threw some of the excess cargo overboard to stabilize the ship: %s
-log_overload_severe,עומס היתר שבר חלק מהספינה! איבדתם: %s (תיקון: %d זהב),The overload broke part of the ship! Lost: %s (repairs: %d gold)
+log_overload_severe,עומס היתר שבר חלק מהספינה! איבדתם: %s (תיקון: %s זהב),The overload broke part of the ship! Lost: %s (repairs: %s gold)
 log_fair_wind,רוח גבית קיצרה את זמן ההפלגה ביום אחד.,A fair wind shortened the voyage by one day.
-log_market_demand,שמועות על ביקוש גבוה הביאו לעלייה דרמטית במחיר ה%s ביעד (כעת %d זהב).,Rumors of high demand caused the price of %s to spike dramatically at your destination (now %d gold).
+log_warehouse_fire,שריפה פרצה במחסן במהלך הלילה! איבדתם: %s,A fire broke out in the warehouse overnight! You lost: %s
+log_warehouse_theft,גנבים פרצו למחסן במהלך הלילה! איבדתם: %s,Thieves broke into the warehouse overnight! You lost: %s
+log_market_demand,שמועות על ביקוש גבוה הביאו לעלייה דרמטית במחיר ה%s ביעד (כעת %s זהב).,Rumors of high demand caused the price of %s to spike dramatically at your destination (now %s gold).
 action_rest,מנוחה,Rest
 resting_label,נחים בנמל...,Resting at port...
 ok,אישור,OK
@@ -113,3 +123,13 @@ upgrade_hull1,חיזוק גוף I,Hull Plating I
 upgrade_hull2,חיזוק גוף II,Hull Plating II
 upgrade_sail1,שדרוג מפרשים I,Sail Upgrade I
 upgrade_sail2,שדרוג מפרשים II,Sail Upgrade II
+upgrade_cargo3,הרחבת מחסן III,Cargo Hold III
+upgrade_cargo4,הרחבת מחסן IV,Cargo Hold IV
+shipyard_security_ships,ספינות אבטחה,Security Ships
+shipyard_security_hint,כל ספינת אבטחה מוסיפה 15% לסיכוי הניצחון בקרב מול פיראטים.,Each security ship adds 15% to your win chance when fighting pirates.
+shipyard_security_owned,%d בשירות,%d hired
+shipyard_hire,גייס (%s),Hire (%s)
+shipyard_amount_plain,+%d,+%d
+shipyard_amount_cargo,+%d (יהיה %d),+%d (will be %d)
+rest_notable_price_drop,בוקר חדש! מחירי ה%s צנחו ב%s.,A new morning! %s prices have crashed in %s.
+rest_notable_price_rise,בוקר חדש! מחירי ה%s זינקו ב%s.,A new morning! %s prices have spiked in %s.

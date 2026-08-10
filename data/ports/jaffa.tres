@@ -6,7 +6,7 @@
 script = ExtResource("1")
 id = "jaffa"
 name_key = "port_jaffa"
-map_position = Vector2(900, 480)
+map_position = Vector2(982, 522)
 price_modifiers = {
 "copper": 1.0,
 "olives": 0.7,

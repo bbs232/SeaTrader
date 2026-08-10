@@ -5,6 +5,7 @@ var _highscores_layer: CanvasLayer
 
 func _ready() -> void:
 	UIUtil.apply_rtl(self)
+	theme = UIUtil.build_theme()
 	_build_ui()
 
 func _build_ui() -> void:
@@ -50,10 +51,29 @@ func _build_ui() -> void:
 	btn_rules.pressed.connect(_on_rules_pressed)
 	vbox.add_child(btn_rules)
 
-	if not OS.has_feature("web"):
+	if OS.has_feature("web"):
+		var btn_refresh := UIUtil.make_button(tr("menu_refresh"))
+		btn_refresh.pressed.connect(_on_refresh_pressed)
+		vbox.add_child(btn_refresh)
+	else:
 		var btn_quit := UIUtil.make_button(tr("menu_quit"))
 		btn_quit.pressed.connect(func(): get_tree().quit())
 		vbox.add_child(btn_quit)
+
+	var version_label := UIUtil.make_label(tr("version_label") % GameState.GAME_VERSION, 13, Color("#7C9AA3"))
+	version_label.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
+	version_label.set_anchors_preset(Control.PRESET_BOTTOM_WIDE)
+	version_label.offset_top = -26
+	version_label.offset_bottom = -8
+	add_child(version_label)
+
+## Web builds are static files the browser caches aggressively (see
+## tools/export-web.ps1); a normal in-page navigation can still serve a
+## stale cached copy, so this forces the browser to bypass its cache and
+## re-fetch the current build, same as a manual hard-refresh (Ctrl+Shift+R).
+func _on_refresh_pressed() -> void:
+	if OS.has_feature("web"):
+		JavaScriptBridge.eval("location.reload(true);")
 
 func _on_new_game_pressed() -> void:
 	_length_dialog_layer = CanvasLayer.new()
@@ -126,7 +146,7 @@ func _on_highscores_pressed() -> void:
 	else:
 		var i := 1
 		for entry in scores:
-			var line := "%d. %s — %s (%s)" % [i, entry.get("name", "?"), entry.get("net_worth", 0), entry.get("date", "")]
+			var line := "%d. %s — %s (%s)" % [i, entry.get("name", "?"), UIUtil.format_gold(entry.get("net_worth", 0)), entry.get("date", "")]
 			vbox.add_child(UIUtil.make_label(line, 18))
 			i += 1
 
