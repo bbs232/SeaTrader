@@ -202,6 +202,21 @@ func _show_confirm(text: String, on_confirm: Callable) -> void:
 	btn_cancel.pressed.connect(func(): dim.queue_free())
 	vbox.add_child(btn_cancel)
 
+## Confirms a purchase before it happens, surfacing the overload warning
+## up front (in the confirmation itself) whenever this purchase would push
+## the ship past its nominal capacity, rather than only after the fact.
+func _confirm_and_buy(good: Good, qty: int, on_bought: Callable) -> void:
+	if qty <= 0:
+		return
+	var cost := GameState.get_price(GameState.current_port_id, good.id) * qty
+	var msg := tr("confirm_buy_max") % [qty, tr(good.name_key), cost]
+	if GameState.get_cargo_used() + qty > GameState.ship_capacity:
+		msg += "\n" + tr("confirm_overload_warning")
+	_show_confirm(msg, func():
+		if GameState.buy(good.id, qty):
+			on_bought.call()
+	)
+
 ## --- Travel confirm ---
 
 func _open_travel_confirm(port_id: String) -> void:
@@ -305,20 +320,17 @@ func _open_trade_panel() -> void:
 		refresh_row.call()
 
 		btn_buy.pressed.connect(func():
-			if GameState.buy(good.id, int(amount.value)):
+			_confirm_and_buy(good, int(amount.value), func():
 				refresh_row.call()
 				refresh_status.call()
+			)
 		)
 		btn_buy_max.pressed.connect(func():
 			var max_buy := GameState.get_max_affordable(good.id)
-			if max_buy <= 0:
-				return
-			var cost := GameState.get_price(GameState.current_port_id, good.id) * max_buy
-			_show_confirm(tr("confirm_buy_max") % [max_buy, tr(good.name_key), cost], func():
-				if GameState.buy(good.id, max_buy):
-					amount.value = max_buy
-					refresh_row.call()
-					refresh_status.call()
+			_confirm_and_buy(good, max_buy, func():
+				amount.value = max_buy
+				refresh_row.call()
+				refresh_status.call()
 			)
 		)
 		btn_sell.pressed.connect(func():

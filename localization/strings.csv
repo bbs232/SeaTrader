@@ -35,6 +35,7 @@ trade_all,הכל,All
 confirm,אשר,Confirm
 confirm_buy_max,לקנות %d %s תמורת %d זהב?,Buy %d %s for %d gold?
 confirm_sell_all,למכור %d %s תמורת %d זהב?,Sell %d %s for %d gold?
+confirm_overload_warning,⚠ הספינה תיטען מעבר לקיבולת הרגילה — סיכון לאובדן מטען או נזק לספינה בדרך,⚠ The ship will be loaded beyond nominal capacity — risk of losing cargo or ship damage en route
 trade_price,מחיר,Price
 trade_owned,ברשותך,Owned
 trade_overload_warning,⚠ עומס יתר! סיכון לאובדן מטען או נזק לספינה בדרך,⚠ Overloaded! Risk of losing cargo or ship damage en route
