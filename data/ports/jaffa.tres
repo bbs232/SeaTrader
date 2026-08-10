@@ -1,0 +1,18 @@
+[gd_resource type="Resource" script_class="Port" load_steps=2 format=3]
+
+[ext_resource type="Script" path="res://scripts/data/Port.gd" id="1"]
+
+[resource]
+script = ExtResource("1")
+id = "jaffa"
+name_key = "port_jaffa"
+map_position = Vector2(900, 480)
+price_modifiers = {
+"copper": 1.0,
+"olives": 0.7,
+"wheat": 0.8,
+"spices": 1.3,
+"wine": 1.0,
+"silk": 1.15
+}
+danger_level = 0.3

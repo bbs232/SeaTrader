@@ -1,0 +1,15 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 1280 720">
+  <defs>
+    <linearGradient id="sea" x1="0" y1="0" x2="0" y2="1">
+      <stop offset="0" stop-color="#2C6E8E"/>
+      <stop offset="1" stop-color="#123A52"/>
+    </linearGradient>
+  </defs>
+  <rect width="1280" height="720" fill="url(#sea)"/>
+  <g stroke="#3E88AC" stroke-width="3" fill="none" opacity="0.5">
+    <path d="M0 100 Q 160 80 320 100 T 640 100 T 960 100 T 1280 100"/>
+    <path d="M0 260 Q 160 240 320 260 T 640 260 T 960 260 T 1280 260"/>
+    <path d="M0 420 Q 160 400 320 420 T 640 420 T 960 420 T 1280 420"/>
+    <path d="M0 580 Q 160 560 320 580 T 640 580 T 960 580 T 1280 580"/>
+  </g>
+</svg>

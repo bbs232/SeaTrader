@@ -1,0 +1,10 @@
+[gd_resource type="Resource" script_class="Good" load_steps=2 format=3]
+
+[ext_resource type="Script" path="res://scripts/data/Good.gd" id="1"]
+
+[resource]
+script = ExtResource("1")
+id = "silk"
+name_key = "good_silk"
+base_price = 120
+volatility = 0.3

@@ -1,0 +1,12 @@
+[gd_resource type="Resource" script_class="ShipUpgrade" load_steps=2 format=3]
+
+[ext_resource type="Script" path="res://scripts/data/ShipUpgrade.gd" id="1"]
+
+[resource]
+script = ExtResource("1")
+id = "sail1"
+name_key = "upgrade_sail1"
+kind = 2
+cost = 600
+amount = 1
+requires_id = ""

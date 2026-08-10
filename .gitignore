@@ -1,0 +1,14 @@
+# Godot 4+ specific ignores
+.godot/
+/android/
+
+# Build outputs (produced locally / by CI, not committed)
+/builds/
+
+# Godot mono/logs
+.mono/
+data_*/
+
+# OS
+Thumbs.db
+.DS_Store

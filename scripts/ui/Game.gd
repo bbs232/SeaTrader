@@ -1,0 +1,487 @@
+extends Control
+
+var map_layer: Control
+var hud_layer: Control
+var overlay_layer: CanvasLayer
+
+var port_buttons: Dictionary = {} # port_id -> TextureButton
+var ship_icon: TextureRect
+var hud_label: Label
+var dock_panel: PanelContainer
+
+func _ready() -> void:
+	UIUtil.apply_rtl(self)
+	GameState.arrived_at_port.connect(_on_arrived_at_port)
+	GameState.pirate_encounter_started.connect(_on_pirate_encounter_started)
+	GameState.game_ended.connect(_on_game_ended)
+	_build_ui()
+
+func _build_ui() -> void:
+	add_child(UIUtil.make_bg("res://assets/art/sea_bg.svg"))
+
+	map_layer = Control.new()
+	map_layer.set_anchors_preset(Control.PRESET_FULL_RECT)
+	add_child(map_layer)
+	_build_map()
+
+	hud_layer = Control.new()
+	hud_layer.set_anchors_preset(Control.PRESET_FULL_RECT)
+	hud_layer.mouse_filter = Control.MOUSE_FILTER_IGNORE
+	add_child(hud_layer)
+	_build_hud()
+
+	_build_dock()
+	_refresh_all()
+
+func _build_map() -> void:
+	for port in GameState.ports:
+		var btn := TextureButton.new()
+		btn.texture_normal = load("res://assets/art/port_marker.svg")
+		btn.custom_minimum_size = Vector2(40, 40)
+		btn.position = port.map_position - Vector2(20, 20)
+		btn.pressed.connect(_on_port_marker_pressed.bind(port.id))
+		map_layer.add_child(btn)
+
+		var label := UIUtil.make_label(tr(port.name_key), 16)
+		label.position = port.map_position + Vector2(-40, 20)
+		label.custom_minimum_size = Vector2(100, 0)
+		label.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
+		map_layer.add_child(label)
+
+		port_buttons[port.id] = btn
+
+	ship_icon = TextureRect.new()
+	ship_icon.texture = load("res://assets/art/ship.svg")
+	ship_icon.custom_minimum_size = Vector2(36, 36)
+	ship_icon.mouse_filter = Control.MOUSE_FILTER_IGNORE
+	map_layer.add_child(ship_icon)
+
+func _build_hud() -> void:
+	var bg := UIUtil.make_panel()
+	bg.set_anchors_preset(Control.PRESET_TOP_WIDE)
+	bg.mouse_filter = Control.MOUSE_FILTER_IGNORE
+	hud_layer.add_child(bg)
+
+	hud_label = UIUtil.make_label("", 20)
+	bg.add_child(hud_label)
+
+	var menu_btn := UIUtil.make_button(tr("menu_button"), 44, 18)
+	menu_btn.mouse_filter = Control.MOUSE_FILTER_STOP
+	menu_btn.set_anchors_preset(Control.PRESET_TOP_RIGHT)
+	menu_btn.position = Vector2(-150, 8)
+	menu_btn.custom_minimum_size = Vector2(140, 40)
+	menu_btn.pressed.connect(_on_menu_pressed)
+	hud_layer.add_child(menu_btn)
+
+func _build_dock() -> void:
+	dock_panel = UIUtil.make_panel()
+	dock_panel.set_anchors_preset(Control.PRESET_BOTTOM_WIDE)
+	dock_panel.position.y -= 90
+	add_child(dock_panel)
+
+	var hbox := HBoxContainer.new()
+	hbox.alignment = BoxContainer.ALIGNMENT_CENTER
+	hbox.add_theme_constant_override("separation", 16)
+	dock_panel.add_child(hbox)
+
+	var btn_trade := UIUtil.make_button(tr("action_trade"))
+	btn_trade.pressed.connect(_open_trade_panel)
+	hbox.add_child(btn_trade)
+
+	var btn_bank := UIUtil.make_button(tr("action_bank"))
+	btn_bank.pressed.connect(_open_bank_panel)
+	hbox.add_child(btn_bank)
+
+	var btn_shipyard := UIUtil.make_button(tr("action_shipyard"))
+	btn_shipyard.pressed.connect(_open_shipyard_panel)
+	hbox.add_child(btn_shipyard)
+
+func _refresh_all() -> void:
+	var port := GameState.get_port(GameState.current_port_id)
+	var port_name := tr(port.name_key) if port else "?"
+	hud_label.text = "%s %d/%d   |   %s: %d   |   %s: %d/%d   |   %s: %d   |   %s" % [
+		tr("hud_day"), GameState.current_day, GameState.game_length_days,
+		tr("hud_gold"), GameState.gold,
+		tr("hud_cargo"), GameState.get_cargo_used(), GameState.ship_capacity,
+		tr("hud_networth"), GameState.get_net_worth(),
+		port_name,
+	]
+	if port:
+		ship_icon.position = port.map_position - Vector2(18, 18)
+	dock_panel.visible = not GameState.is_traveling
+
+func _on_port_marker_pressed(port_id: String) -> void:
+	if GameState.is_traveling:
+		return
+	if port_id == GameState.current_port_id:
+		return
+	_open_travel_confirm(port_id)
+
+## --- Overlay helpers ---
+
+func _open_overlay() -> PanelContainer:
+	overlay_layer = CanvasLayer.new()
+	add_child(overlay_layer)
+
+	var dim := ColorRect.new()
+	dim.color = Color(0, 0, 0, 0.55)
+	dim.set_anchors_preset(Control.PRESET_FULL_RECT)
+	overlay_layer.add_child(dim)
+
+	var scroll := ScrollContainer.new()
+	scroll.set_anchors_preset(Control.PRESET_FULL_RECT)
+	dim.add_child(scroll)
+
+	var center := CenterContainer.new()
+	center.set_anchors_preset(Control.PRESET_FULL_RECT)
+	center.size_flags_horizontal = Control.SIZE_EXPAND_FILL
+	center.size_flags_vertical = Control.SIZE_EXPAND_FILL
+	scroll.add_child(center)
+
+	var panel := UIUtil.make_panel()
+	center.add_child(panel)
+	return panel
+
+func _close_overlay() -> void:
+	if overlay_layer:
+		overlay_layer.queue_free()
+		overlay_layer = null
+	_refresh_all()
+
+## --- Travel confirm ---
+
+func _open_travel_confirm(port_id: String) -> void:
+	var panel := _open_overlay()
+	var vbox := VBoxContainer.new()
+	vbox.custom_minimum_size = Vector2(380, 0)
+	vbox.add_theme_constant_override("separation", 12)
+	panel.add_child(vbox)
+
+	var dest := GameState.get_port(port_id)
+	var days := GameState.get_travel_days(GameState.current_port_id, port_id)
+
+	vbox.add_child(UIUtil.make_title(tr(dest.name_key), 26))
+	vbox.add_child(UIUtil.make_label(tr("travel_estimate") % days, 18))
+
+	var btn_go := UIUtil.make_button(tr("travel_confirm"))
+	btn_go.pressed.connect(func():
+		_close_overlay()
+		GameState.start_travel(port_id)
+	)
+	vbox.add_child(btn_go)
+
+	var btn_cancel := UIUtil.make_button(tr("cancel"))
+	btn_cancel.pressed.connect(_close_overlay)
+	vbox.add_child(btn_cancel)
+
+## --- Trade panel ---
+
+func _open_trade_panel() -> void:
+	var panel := _open_overlay()
+	var vbox := VBoxContainer.new()
+	vbox.custom_minimum_size = Vector2(520, 0)
+	vbox.add_theme_constant_override("separation", 10)
+	panel.add_child(vbox)
+
+	var port := GameState.get_port(GameState.current_port_id)
+	vbox.add_child(UIUtil.make_title(tr("trade_title") % tr(port.name_key), 26))
+	var status_label := UIUtil.make_label("", 16)
+	vbox.add_child(status_label)
+
+	var refresh_status := func():
+		status_label.text = "%s: %d   |   %s: %d/%d" % [
+			tr("hud_gold"), GameState.gold, tr("hud_cargo"), GameState.get_cargo_used(), GameState.ship_capacity]
+
+	refresh_status.call()
+
+	for good in GameState.goods:
+		var row := HBoxContainer.new()
+		row.add_theme_constant_override("separation", 10)
+		vbox.add_child(row)
+
+		var name_label := UIUtil.make_label(tr(good.name_key), 18)
+		name_label.custom_minimum_size = Vector2(90, 0)
+		row.add_child(name_label)
+
+		var price_label := UIUtil.make_label("", 16)
+		price_label.custom_minimum_size = Vector2(140, 0)
+		row.add_child(price_label)
+
+		var owned_label := UIUtil.make_label("", 16)
+		owned_label.custom_minimum_size = Vector2(90, 0)
+		row.add_child(owned_label)
+
+		var amount := SpinBox.new()
+		amount.min_value = 1
+		amount.max_value = 9999
+		amount.value = 1
+		amount.custom_minimum_size = Vector2(80, 0)
+		row.add_child(amount)
+
+		var btn_buy := UIUtil.make_button(tr("trade_buy"), 44, 16)
+		btn_buy.custom_minimum_size = Vector2(70, 44)
+		row.add_child(btn_buy)
+
+		var btn_sell := UIUtil.make_button(tr("trade_sell"), 44, 16)
+		btn_sell.custom_minimum_size = Vector2(70, 44)
+		row.add_child(btn_sell)
+
+		var refresh_row := func():
+			var price := GameState.get_price(GameState.current_port_id, good.id)
+			price_label.text = "%s: %d" % [tr("trade_price"), price]
+			owned_label.text = "%s: %d" % [tr("trade_owned"), GameState.cargo.get(good.id, 0)]
+
+		refresh_row.call()
+
+		btn_buy.pressed.connect(func():
+			if GameState.buy(good.id, int(amount.value)):
+				refresh_row.call()
+				refresh_status.call()
+		)
+		btn_sell.pressed.connect(func():
+			if GameState.sell(good.id, int(amount.value)):
+				refresh_row.call()
+				refresh_status.call()
+		)
+
+	var btn_close := UIUtil.make_button(tr("close"))
+	btn_close.pressed.connect(_close_overlay)
+	vbox.add_child(btn_close)
+
+## --- Bank panel ---
+
+func _open_bank_panel() -> void:
+	var panel := _open_overlay()
+	var vbox := VBoxContainer.new()
+	vbox.custom_minimum_size = Vector2(420, 0)
+	vbox.add_theme_constant_override("separation", 12)
+	panel.add_child(vbox)
+
+	vbox.add_child(UIUtil.make_title(tr("bank_title"), 26))
+	var info_label := UIUtil.make_label("", 18)
+	vbox.add_child(info_label)
+
+	var amount := SpinBox.new()
+	amount.min_value = 1
+	amount.max_value = 999999
+	amount.value = 100
+	amount.step = 1
+	vbox.add_child(amount)
+
+	var refresh_info := func():
+		info_label.text = "%s: %d\n%s: %d\n%s: %d\n%s: %d" % [
+			tr("hud_gold"), GameState.gold,
+			tr("bank_savings"), int(GameState.savings),
+			tr("bank_loan"), int(GameState.loan),
+			tr("bank_max_loan"), GameState.bank_max_loan(),
+		]
+
+	refresh_info.call()
+
+	var grid := GridContainer.new()
+	grid.columns = 2
+	grid.add_theme_constant_override("h_separation", 10)
+	grid.add_theme_constant_override("v_separation", 10)
+	vbox.add_child(grid)
+
+	var btn_deposit := UIUtil.make_button(tr("bank_deposit"))
+	btn_deposit.pressed.connect(func():
+		GameState.bank_deposit(int(amount.value))
+		refresh_info.call()
+	)
+	grid.add_child(btn_deposit)
+
+	var btn_withdraw := UIUtil.make_button(tr("bank_withdraw"))
+	btn_withdraw.pressed.connect(func():
+		GameState.bank_withdraw(int(amount.value))
+		refresh_info.call()
+	)
+	grid.add_child(btn_withdraw)
+
+	var btn_borrow := UIUtil.make_button(tr("bank_borrow"))
+	btn_borrow.pressed.connect(func():
+		GameState.bank_borrow(int(amount.value))
+		refresh_info.call()
+	)
+	grid.add_child(btn_borrow)
+
+	var btn_repay := UIUtil.make_button(tr("bank_repay"))
+	btn_repay.pressed.connect(func():
+		GameState.bank_repay(int(amount.value))
+		refresh_info.call()
+	)
+	grid.add_child(btn_repay)
+
+	var btn_close := UIUtil.make_button(tr("close"))
+	btn_close.pressed.connect(_close_overlay)
+	vbox.add_child(btn_close)
+
+## --- Shipyard panel ---
+
+func _open_shipyard_panel() -> void:
+	var panel := _open_overlay()
+	var vbox := VBoxContainer.new()
+	vbox.custom_minimum_size = Vector2(460, 0)
+	vbox.add_theme_constant_override("separation", 10)
+	panel.add_child(vbox)
+
+	vbox.add_child(UIUtil.make_title(tr("shipyard_title"), 26))
+
+	for up in GameState.upgrades:
+		var row := HBoxContainer.new()
+		row.add_theme_constant_override("separation", 10)
+		vbox.add_child(row)
+
+		var label := UIUtil.make_label(tr(up.name_key), 18)
+		label.custom_minimum_size = Vector2(220, 0)
+		row.add_child(label)
+
+		var status_label := UIUtil.make_label("", 16)
+		status_label.custom_minimum_size = Vector2(90, 0)
+		row.add_child(status_label)
+
+		var btn_buy := UIUtil.make_button(tr("shipyard_buy") % up.cost, 44, 16)
+		row.add_child(btn_buy)
+
+		var refresh_row := func():
+			if GameState.is_upgrade_owned(up.id):
+				status_label.text = tr("shipyard_owned")
+				btn_buy.disabled = true
+			elif up.requires_id != "" and not GameState.is_upgrade_owned(up.requires_id):
+				status_label.text = tr("shipyard_locked")
+				btn_buy.disabled = true
+			else:
+				status_label.text = ""
+				btn_buy.disabled = not GameState.can_buy_upgrade(up.id)
+
+		refresh_row.call()
+		btn_buy.pressed.connect(func():
+			if GameState.buy_upgrade(up.id):
+				refresh_row.call()
+		)
+
+	var btn_close := UIUtil.make_button(tr("close"))
+	btn_close.pressed.connect(_close_overlay)
+	vbox.add_child(btn_close)
+
+## --- Menu (save & exit) ---
+
+func _on_menu_pressed() -> void:
+	var panel := _open_overlay()
+	var vbox := VBoxContainer.new()
+	vbox.custom_minimum_size = Vector2(320, 0)
+	vbox.add_theme_constant_override("separation", 12)
+	panel.add_child(vbox)
+
+	var btn_resume := UIUtil.make_button(tr("menu_resume"))
+	btn_resume.pressed.connect(_close_overlay)
+	vbox.add_child(btn_resume)
+
+	var btn_save_exit := UIUtil.make_button(tr("menu_save_exit"))
+	btn_save_exit.pressed.connect(func():
+		SaveManager.save_game()
+		get_tree().change_scene_to_file("res://scenes/MainMenu.tscn")
+	)
+	vbox.add_child(btn_save_exit)
+
+## --- Pirate encounter ---
+
+func _on_pirate_encounter_started(_details: Dictionary) -> void:
+	var panel := _open_overlay()
+	var vbox := VBoxContainer.new()
+	vbox.custom_minimum_size = Vector2(380, 0)
+	vbox.add_theme_constant_override("separation", 12)
+	panel.add_child(vbox)
+
+	var icon := TextureRect.new()
+	icon.texture = load("res://assets/art/pirate.svg")
+	icon.custom_minimum_size = Vector2(80, 80)
+	icon.stretch_mode = TextureRect.STRETCH_KEEP_ASPECT_CENTERED
+	var icon_center := CenterContainer.new()
+	icon_center.add_child(icon)
+	vbox.add_child(icon_center)
+
+	vbox.add_child(UIUtil.make_title(tr("pirates_title"), 24))
+	vbox.add_child(UIUtil.make_label(tr("pirates_desc"), 16))
+
+	var btn_fight := UIUtil.make_button(tr("pirates_fight"))
+	btn_fight.pressed.connect(func(): _resolve_pirates("fight"))
+	vbox.add_child(btn_fight)
+
+	var btn_flee := UIUtil.make_button(tr("pirates_flee"))
+	btn_flee.pressed.connect(func(): _resolve_pirates("flee"))
+	vbox.add_child(btn_flee)
+
+	var btn_pay := UIUtil.make_button(tr("pirates_pay"))
+	btn_pay.pressed.connect(func(): _resolve_pirates("pay"))
+	vbox.add_child(btn_pay)
+
+func _resolve_pirates(choice: String) -> void:
+	var result := GameState.resolve_pirate_encounter(choice)
+	_close_overlay()
+	_show_message(_format_pirate_result(result))
+
+func _format_pirate_result(result: Dictionary) -> String:
+	match result.get("outcome", ""):
+		"won":
+			return tr("log_pirates_won") % result.get("bounty", 0)
+		"lost":
+			return tr("log_pirates_lost")
+		"escaped":
+			return tr("log_pirates_escaped")
+		"caught":
+			return tr("log_pirates_caught") % result.get("ransom", 0)
+		"paid":
+			return tr("log_pirates_paid") % result.get("ransom", 0)
+		_:
+			return ""
+
+## --- Arrival / travel report ---
+
+func _on_arrived_at_port(_port_id: String, log: Array) -> void:
+	if GameState.current_day > GameState.game_length_days:
+		return # game_ended will handle the transition
+	var lines: Array = []
+	for entry in log:
+		var line := _format_log_entry(entry)
+		if line != "":
+			lines.append(line)
+	if lines.is_empty():
+		lines.append(tr("travel_uneventful"))
+	_show_message("\n".join(lines))
+
+func _format_log_entry(entry: Dictionary) -> String:
+	match entry.get("type", ""):
+		"storm":
+			var lost: Dictionary = entry.get("lost_goods", {})
+			if lost.is_empty():
+				return tr("log_storm_none")
+			var parts: Array = []
+			for good_id in lost.keys():
+				var good := GameState.get_good(good_id)
+				parts.append("%d %s" % [lost[good_id], tr(good.name_key) if good else good_id])
+			return tr("log_storm_loss") % ", ".join(parts)
+		"fair_wind":
+			return tr("log_fair_wind")
+		"market_demand":
+			return tr("log_market_demand")
+		"pirates":
+			return _format_pirate_result(entry)
+		_:
+			return ""
+
+func _show_message(text: String) -> void:
+	var panel := _open_overlay()
+	var vbox := VBoxContainer.new()
+	vbox.custom_minimum_size = Vector2(380, 0)
+	vbox.add_theme_constant_override("separation", 12)
+	panel.add_child(vbox)
+	vbox.add_child(UIUtil.make_label(text, 18))
+	var btn_ok := UIUtil.make_button(tr("ok"))
+	btn_ok.pressed.connect(_close_overlay)
+	vbox.add_child(btn_ok)
+
+## --- Game end ---
+
+func _on_game_ended(_summary: Dictionary) -> void:
+	get_tree().change_scene_to_file("res://scenes/EndGame.tscn")

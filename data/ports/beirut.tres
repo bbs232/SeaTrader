@@ -1,0 +1,18 @@
+[gd_resource type="Resource" script_class="Port" load_steps=2 format=3]
+
+[ext_resource type="Script" path="res://scripts/data/Port.gd" id="1"]
+
+[resource]
+script = ExtResource("1")
+id = "beirut"
+name_key = "port_beirut"
+map_position = Vector2(850, 380)
+price_modifiers = {
+"copper": 1.2,
+"olives": 0.85,
+"wheat": 1.1,
+"spices": 1.05,
+"wine": 0.7,
+"silk": 1.0
+}
+danger_level = 0.3

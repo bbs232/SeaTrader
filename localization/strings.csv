@@ -1,0 +1,89 @@
+keys,he,en
+app_title,סוחר הים,Sea Trader
+app_subtitle,מסחר בים התיכון,Trade the Mediterranean Sea
+menu_new_game,משחק חדש,New Game
+menu_continue,המשך משחק,Continue
+menu_highscores,שיאים,High Scores
+menu_language,שנה שפה,Change Language
+menu_quit,יציאה,Quit
+new_game_pick_length,בחר אורך משחק,Choose Game Length
+length_short,קצר (10 ימים),Short (10 days)
+length_medium,בינוני (21 ימים),Medium (21 days)
+length_long,ארוך (35 ימים),Long (35 days)
+cancel,ביטול,Cancel
+highscores_title,לוח השיאים,High Scores
+highscores_empty,אין עדיין שיאים,No scores yet
+close,סגור,Close
+menu_button,תפריט,Menu
+action_trade,מסחר,Trade
+action_bank,בנק,Bank
+action_shipyard,מספנה,Shipyard
+hud_day,יום,Day
+hud_gold,זהב,Gold
+hud_cargo,מטען,Cargo
+hud_networth,הון נקי,Net Worth
+travel_estimate,משך ההפלגה המשוער: %d ימים,Estimated voyage: %d days
+travel_confirm,הפלג,Set Sail
+trade_title,מסחר ב-%s,Trade at %s
+trade_buy,קנה,Buy
+trade_sell,מכור,Sell
+trade_price,מחיר,Price
+trade_owned,ברשותך,Owned
+bank_title,הבנק,The Bank
+bank_savings,חיסכון,Savings
+bank_loan,הלוואה,Loan
+bank_max_loan,מסגרת אשראי,Credit Limit
+bank_deposit,הפקד,Deposit
+bank_withdraw,משוך,Withdraw
+bank_borrow,לווה,Borrow
+bank_repay,החזר הלוואה,Repay Loan
+shipyard_title,המספנה,The Shipyard
+shipyard_buy,קנה (%d),Buy (%d)
+shipyard_owned,ברשותך,Owned
+shipyard_locked,נעול,Locked
+menu_resume,חזרה למשחק,Resume
+menu_save_exit,שמור וצא לתפריט,Save & Exit to Menu
+pirates_title,פיראטים!,Pirates!
+pirates_desc,ספינת פיראטים מתקרבת. מה תעשה?,A pirate ship approaches. What will you do?
+pirates_fight,הילחם,Fight
+pirates_flee,ברח,Flee
+pirates_pay,שלם כופר,Pay Ransom
+log_pirates_won,ניצחת את הפיראטים ושדדת מהם %d זהב!,You defeated the pirates and looted %d gold!
+log_pirates_lost,הפסדת בקרב והפיראטים שדדו חלק מהמטען שלך.,You lost the fight and the pirates looted some of your cargo.
+log_pirates_escaped,הצלחת לברוח מהפיראטים!,You escaped the pirates!
+log_pirates_caught,הפיראטים תפסו אותך ולקחו %d זהב.,The pirates caught you and took %d gold.
+log_pirates_paid,שילמת %d זהב כופר לפיראטים.,You paid %d gold ransom to the pirates.
+travel_uneventful,ההפלגה עברה בשלום.,The voyage passed without incident.
+log_storm_none,סערה עברה לידכם ללא נזק.,A storm passed nearby without damage.
+log_storm_loss,סערה פגעה בספינה! איבדת: %s,A storm struck the ship! You lost: %s
+log_fair_wind,רוח גבית קיצרה את זמן ההפלגה ביום אחד.,A fair wind shortened the voyage by one day.
+log_market_demand,שמעתם שמועות על ביקוש מיוחד בנמלים.,You heard rumors of special demand in the ports.
+ok,אישור,OK
+endgame_title,סוף המסע,Voyage Complete
+endgame_cargo_value,שווי מטען,Cargo Value
+endgame_days,ימים,Days
+endgame_networth,הון נקי סופי,Final Net Worth
+endgame_enter_name,הזן את שמך לשמירת השיא:,Enter your name to save the score:
+endgame_name_placeholder,השם שלך,Your name
+endgame_save_score,שמור שיא,Save Score
+endgame_score_saved,השיא נשמר!,Score Saved!
+endgame_to_menu,לתפריט הראשי,Main Menu
+good_copper,נחושת,Copper
+good_olives,זיתים,Olives
+good_wheat,חיטה,Wheat
+good_spices,תבלינים,Spices
+good_wine,יין,Wine
+good_silk,משי,Silk
+port_jaffa,יפו,Jaffa
+port_alexandria,אלכסנדריה,Alexandria
+port_istanbul,איסטנבול,Istanbul
+port_limassol,לימסול,Limassol
+port_piraeus,פיראוס,Piraeus
+port_beirut,ביירות,Beirut
+port_venice,ונציה,Venice
+upgrade_cargo1,הרחבת מחסן I,Cargo Hold I
+upgrade_cargo2,הרחבת מחסן II,Cargo Hold II
+upgrade_hull1,חיזוק גוף I,Hull Plating I
+upgrade_hull2,חיזוק גוף II,Hull Plating II
+upgrade_sail1,שדרוג מפרשים I,Sail Upgrade I
+upgrade_sail2,שדרוג מפרשים II,Sail Upgrade II
