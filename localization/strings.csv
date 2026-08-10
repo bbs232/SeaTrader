@@ -81,7 +81,9 @@ log_aground_loss,עליתם על שרטון! איבדתם: %s (תיקון: %d ז
 log_overload_minor,הצוות זרק חלק מהמטען העודף לים כדי לייצב את הספינה: %s,The crew threw some of the excess cargo overboard to stabilize the ship: %s
 log_overload_severe,עומס היתר שבר חלק מהספינה! איבדתם: %s (תיקון: %d זהב),The overload broke part of the ship! Lost: %s (repairs: %d gold)
 log_fair_wind,רוח גבית קיצרה את זמן ההפלגה ביום אחד.,A fair wind shortened the voyage by one day.
-log_market_demand,שמעתם שמועות על ביקוש מיוחד בנמלים.,You heard rumors of special demand in the ports.
+log_market_demand,שמועות על ביקוש גבוה הביאו לעלייה דרמטית במחיר ה%s ביעד (כעת %d זהב).,Rumors of high demand caused the price of %s to spike dramatically at your destination (now %d gold).
+action_rest,מנוחה,Rest
+resting_label,נחים בנמל...,Resting at port...
 ok,אישור,OK
 endgame_title,סוף המסע,Voyage Complete
 endgame_cargo_value,שווי מטען,Cargo Value

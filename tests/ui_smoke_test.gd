@@ -83,6 +83,13 @@ func _test_game_overlays() -> void:
 	assert(instance.is_animating_travel == true)
 	print("ship travel animation start OK")
 
+	instance.is_animating_travel = false # the ship animation above never really finishes headlessly (no real time passes)
+	var rest_day_before: int = GameState.current_day
+	instance.call("_on_rest_pressed")
+	assert(instance.is_resting == true)
+	assert(GameState.current_day == rest_day_before + 1)
+	print("rest animation start OK")
+
 	instance.call("_on_menu_pressed")
 	instance.call("_close_overlay")
 	print("menu panel OK")

@@ -15,6 +15,7 @@ var dock_panel: PanelContainer
 
 var ship_tween: Tween
 var is_animating_travel: bool = false
+var is_resting: bool = false
 
 func _ready() -> void:
 	UIUtil.apply_rtl(self)
@@ -120,6 +121,10 @@ func _build_dock() -> void:
 	btn_prices.pressed.connect(_open_market_panel)
 	hbox.add_child(btn_prices)
 
+	var btn_rest := UIUtil.make_button(tr("action_rest"))
+	btn_rest.pressed.connect(_on_rest_pressed)
+	hbox.add_child(btn_rest)
+
 func _refresh_all() -> void:
 	var port := GameState.get_port(GameState.current_port_id)
 	var port_name := tr(port.name_key) if port else "?"
@@ -132,7 +137,7 @@ func _refresh_all() -> void:
 	]
 	if port and not is_animating_travel:
 		ship_icon.position = port.map_position - Vector2(18, 18)
-	dock_panel.visible = not GameState.is_traveling and not is_animating_travel
+	dock_panel.visible = not GameState.is_traveling and not is_animating_travel and not is_resting
 	_update_port_marker_states()
 
 ## Dims ports that can't be reached directly from here (Piraeus/Venice
@@ -149,7 +154,7 @@ func _update_port_marker_states() -> void:
 			btn.modulate = Color(1, 1, 1, 0.4)
 
 func _on_port_marker_pressed(port_id: String) -> void:
-	if GameState.is_traveling or is_animating_travel:
+	if GameState.is_traveling or is_animating_travel or is_resting:
 		return
 	if port_id == GameState.current_port_id:
 		return
@@ -157,6 +162,49 @@ func _on_port_marker_pressed(port_id: String) -> void:
 		_show_message(tr("route_blocked"))
 		return
 	_open_travel_confirm(port_id)
+
+## --- Resting (skip a day at the current port) ---
+
+func _on_rest_pressed() -> void:
+	if GameState.is_traveling or is_animating_travel or is_resting:
+		return
+	is_resting = true
+	GameState.rest_at_port()
+	if GameState.current_day > GameState.game_length_days:
+		return # the game just ended; game_ended already handles the scene change
+	_play_rest_animation()
+
+## No ship movement to animate here (the player stays put), so a day passing
+## is shown as a brief fade-to-dark-and-back with a "resting" caption; the
+## HUD (new day, updated prices) only becomes visible once it fades back in.
+func _play_rest_animation() -> void:
+	dock_panel.visible = false
+
+	var overlay := ColorRect.new()
+	overlay.color = Color(0.04, 0.08, 0.14, 0.0)
+	overlay.set_anchors_preset(Control.PRESET_FULL_RECT)
+	overlay.mouse_filter = Control.MOUSE_FILTER_IGNORE
+	add_child(overlay)
+
+	var center := CenterContainer.new()
+	center.set_anchors_preset(Control.PRESET_FULL_RECT)
+	overlay.add_child(center)
+
+	var label := UIUtil.make_title(tr("resting_label"), 30)
+	label.modulate.a = 0.0
+	center.add_child(label)
+
+	var tween := create_tween()
+	tween.tween_property(overlay, "color:a", 0.85, 0.35)
+	tween.parallel().tween_property(label, "modulate:a", 1.0, 0.35)
+	tween.tween_interval(0.5)
+	tween.tween_property(overlay, "color:a", 0.0, 0.4)
+	tween.parallel().tween_property(label, "modulate:a", 0.0, 0.4)
+	tween.finished.connect(func():
+		overlay.queue_free()
+		is_resting = false
+		_refresh_all()
+	)
 
 ## --- Ship travel animation ---
 ##
@@ -767,7 +815,9 @@ func _format_log_entry(entry: Dictionary) -> String:
 		"fair_wind":
 			return tr("log_fair_wind")
 		"market_demand":
-			return tr("log_market_demand")
+			var good := GameState.get_good(entry.get("good_id", ""))
+			var good_name := tr(good.name_key) if good else "?"
+			return tr("log_market_demand") % [good_name, entry.get("new_price", 0)]
 		"pirates":
 			return _format_pirate_result(entry)
 		_:

@@ -16,8 +16,10 @@ const OVERLOAD_ALLOWANCE := 1.5 # can risk-load up to 150% of nominal capacity
 const OVERLOAD_DAILY_RISK := 0.5 # scaled by how far over nominal capacity you are
 
 ## Piraeus and Venice sit at the far corners of the trade map; direct voyages
-## to/from them are blocked unless one of these hub ports is the other end
-## of the leg (i.e. they must be used as a stopover first).
+## between them and Jaffa/Beirut are blocked unless one of these hub ports is
+## the other end of the leg (i.e. they must be used as a stopover first).
+## Piraeus and Venice can still sail directly to each other (see
+## can_travel_directly / get_travel_half_days).
 const HUB_PORTS: Array[String] = ["limassol", "istanbul", "alexandria"]
 const FAR_PORTS: Array[String] = ["piraeus", "venice"]
 
@@ -307,8 +309,12 @@ func _apply_daily_interest() -> void:
 ## hops can be modeled precisely): a "regular" direct leg is a full day (2),
 ## a "far" leg to/from Piraeus/Venice is two days (4), and any leg touching
 ## Limassol is just half a day (1) -- except Limassol<->Venice, which is a
-## full day (2) like a regular leg despite Venice being a far port.
+## full day (2) like a regular leg despite Venice being a far port. The
+## direct Piraeus<->Venice crossing is its own special case: half a day (1),
+## same as a Limassol hop.
 func get_travel_half_days(from_id: String, to_id: String) -> int:
+	if FAR_PORTS.has(from_id) and FAR_PORTS.has(to_id):
+		return 1
 	if from_id == "limassol" or to_id == "limassol":
 		var other := to_id if from_id == "limassol" else from_id
 		return 2 if other == "venice" else 1
@@ -317,10 +323,13 @@ func get_travel_half_days(from_id: String, to_id: String) -> int:
 	return 2
 
 ## Direct travel is disallowed between a far port (Piraeus/Venice) and
-## anything other than a hub port (Limassol/Istanbul/Alexandria) — including
-## between the two far ports themselves. A hub port on either end always
-## satisfies the required stopover.
+## anything other than a hub port (Limassol/Istanbul/Alexandria) -- except
+## the two far ports can always sail directly to each other (a short hop
+## across the Aegean). A hub port on either end always satisfies the
+## required stopover for everything else.
 func can_travel_directly(from_id: String, to_id: String) -> bool:
+	if FAR_PORTS.has(from_id) and FAR_PORTS.has(to_id):
+		return true
 	if FAR_PORTS.has(from_id) and not HUB_PORTS.has(to_id):
 		return false
 	if FAR_PORTS.has(to_id) and not HUB_PORTS.has(from_id):
@@ -355,6 +364,14 @@ func _advance_travel() -> void:
 		current_port_id = travel_destination_id
 		is_traveling = false
 		arrived_at_port.emit(current_port_id, travel_log.duplicate())
+
+## Skips a day while staying docked at the current port: no travel events
+## (storms/pirates/etc.) since the ship never leaves, but prices still drift
+## and interest still accrues exactly like any other day.
+func rest_at_port() -> void:
+	if is_traveling:
+		return
+	_advance_day()
 
 func _advance_day() -> void:
 	current_day += 1
@@ -395,9 +412,23 @@ func _trigger_event(ev: EventDef) -> void:
 			travel_half_days_remaining = max(0, travel_half_days_remaining - 2)
 			travel_log.append({"type": "fair_wind"})
 		EventDef.Kind.MARKET_DEMAND:
-			travel_log.append({"type": "market_demand"})
+			_apply_market_demand()
 		EventDef.Kind.AGROUND:
 			_apply_aground()
+
+## Rumors of high demand always push a price UP, never down, and always at
+## the port you're actually heading to (not wherever the rumor was "heard"),
+## since that's the price that matters to the player planning the sale.
+func _apply_market_demand() -> void:
+	var dest_prices: Dictionary = prices.get(travel_destination_id, {})
+	if dest_prices.is_empty():
+		return
+	var good_ids := dest_prices.keys()
+	var good_id: String = good_ids[randi() % good_ids.size()]
+	var multiplier := randf_range(1.4, 2.2)
+	var new_price: int = max(1, int(round(dest_prices[good_id] * multiplier)))
+	dest_prices[good_id] = new_price
+	travel_log.append({"type": "market_demand", "good_id": good_id, "new_price": new_price})
 
 func _apply_storm() -> void:
 	var mitigation: float = clamp(ship_defense_points * 0.1, 0.0, 0.6)

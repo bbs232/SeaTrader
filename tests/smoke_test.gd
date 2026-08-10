@@ -61,13 +61,15 @@ func _initialize() -> void:
 		assert(guard < 20)
 	print("travel/events/overload stress (200 runs) OK")
 
-	# Route restriction: Piraeus/Venice require a Limassol/Istanbul/Alexandria stopover
+	# Route restriction: Piraeus/Venice require a Limassol/Istanbul/Alexandria
+	# stopover to/from Jaffa/Beirut, but can sail directly to each other.
 	GameState.new_game(21, "jaffa")
 	assert(not GameState.can_travel_directly("jaffa", "piraeus"))
 	assert(not GameState.can_travel_directly("jaffa", "venice"))
 	assert(not GameState.can_travel_directly("piraeus", "jaffa"))
 	assert(not GameState.can_travel_directly("venice", "beirut"))
-	assert(not GameState.can_travel_directly("piraeus", "venice"))
+	assert(GameState.can_travel_directly("piraeus", "venice"))
+	assert(GameState.can_travel_directly("venice", "piraeus"))
 	assert(GameState.can_travel_directly("jaffa", "limassol"))
 	assert(GameState.can_travel_directly("limassol", "piraeus"))
 	assert(GameState.can_travel_directly("istanbul", "venice"))
@@ -77,7 +79,8 @@ func _initialize() -> void:
 	print("route restriction OK")
 
 	# Fixed travel durations: regular leg = 1 day, far leg = 2 days, any
-	# Limassol leg = half a day, except Limassol<->Venice = 1 full day.
+	# Limassol leg = half a day (except Limassol<->Venice = 1 full day), and
+	# the direct Piraeus<->Venice crossing = half a day.
 	assert(GameState.get_travel_half_days("jaffa", "beirut") == 2)
 	assert(GameState.get_travel_half_days("alexandria", "istanbul") == 2)
 	assert(GameState.get_travel_half_days("alexandria", "piraeus") == 4)
@@ -86,15 +89,20 @@ func _initialize() -> void:
 	assert(GameState.get_travel_half_days("limassol", "piraeus") == 1)
 	assert(GameState.get_travel_half_days("limassol", "venice") == 2)
 	assert(GameState.get_travel_half_days("venice", "limassol") == 2)
+	assert(GameState.get_travel_half_days("piraeus", "venice") == 1)
+	assert(GameState.get_travel_half_days("venice", "piraeus") == 1)
 	print("travel duration table OK")
 
 	# Two half-day Limassol legs in a row bank into exactly one full day-tick;
-	# a lone half-day leg never rolls a travel event (too short to matter).
+	# a lone half-day leg never rolls a travel event (too short to matter),
+	# and prices/interest don't move on it either.
 	GameState.new_game(21, "jaffa")
 	var day_before: int = GameState.current_day
+	var wheat_price_before: int = GameState.get_price("limassol", "wheat")
 	GameState.start_travel("limassol")
 	assert(GameState.current_port_id == "limassol")
 	assert(GameState.current_day == day_before)
+	assert(GameState.get_price("limassol", "wheat") == wheat_price_before)
 	GameState.start_travel("istanbul")
 	var half_day_guard := 0
 	while not GameState.pending_encounter.is_empty() and half_day_guard < 20:
@@ -103,6 +111,17 @@ func _initialize() -> void:
 	assert(GameState.current_port_id == "istanbul")
 	assert(GameState.current_day == day_before + 1)
 	print("half-day carry-over OK")
+
+	# Piraeus <-> Venice sails directly, half a day, no price movement.
+	GameState.new_game(21, "jaffa")
+	GameState.current_port_id = "piraeus"
+	day_before = GameState.current_day
+	var silk_price_before: int = GameState.get_price("venice", "silk")
+	GameState.start_travel("venice")
+	assert(GameState.current_port_id == "venice")
+	assert(GameState.current_day == day_before)
+	assert(GameState.get_price("venice", "silk") == silk_price_before)
+	print("Piraeus<->Venice direct crossing OK")
 
 	# A regular one-day leg always resolves in exactly one day-tick.
 	GameState.new_game(21, "jaffa")
@@ -115,6 +134,31 @@ func _initialize() -> void:
 	assert(GameState.current_port_id == "beirut")
 	assert(GameState.current_day == day_before + 1)
 	print("regular one-day leg OK")
+
+	# Market demand rumors always push the destination price UP, never down.
+	GameState.new_game(21, "jaffa")
+	GameState.travel_destination_id = "beirut"
+	var demand_before := {}
+	for g in GameState.goods:
+		demand_before[g.id] = GameState.get_price("beirut", g.id)
+	GameState._apply_market_demand()
+	var any_increased := false
+	for g in GameState.goods:
+		var after_price: int = GameState.get_price("beirut", g.id)
+		assert(after_price >= demand_before[g.id])
+		if after_price > demand_before[g.id]:
+			any_increased = true
+	assert(any_increased)
+	print("market demand price spike OK")
+
+	# Resting at port skips a day (prices/interest tick) without traveling.
+	GameState.new_game(21, "jaffa")
+	day_before = GameState.current_day
+	GameState.rest_at_port()
+	assert(not GameState.is_traveling)
+	assert(GameState.current_port_id == "jaffa")
+	assert(GameState.current_day == day_before + 1)
+	print("rest at port OK")
 
 	# Overload mechanics in isolation
 	GameState.new_game(21, "jaffa")

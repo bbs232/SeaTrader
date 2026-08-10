@@ -67,16 +67,19 @@ const _RULES_HE := """מטרת המשחק
 "קנה"/"מכור" פועלים על הכמות שנבחרה. "מקס׳" קונה את המקסימום האפשרי לפי הזהב הפנוי ומקום בספינה. "הכל" מוכר את כל הכמות המוחזקת. קנייה מרבית או מכירה מלאה תמיד מציגות חלון אישור מראש, ואם הקנייה תגרום לעומס יתר — האזהרה על כך מופיעה בתוך אותו חלון אישור, לפני ביצוע הרכישה.
 
 נסיעה וזמן
-הפלגה רגילה בין שני נמלים (שאינם לימסול) אורכת יום אחד, והפלגה ל/מפיראוס או ונציה אורכת יומיים. כל הפלגה שנוגעת בלימסול אורכת חצי יום בלבד — חוץ מהקטע לימסול-ונציה, שאורך יום שלם. בהפלגות של יום ומעלה חולפים ימים אמיתיים, המחירים מתעדכנים, וריבית נצברת על הלוואות/חיסכון.
+הפלגה רגילה בין שני נמלים (שאינם לימסול) אורכת יום אחד, והפלגה מנמל ציר ל/מפיראוס או ונציה אורכת יומיים. כל הפלגה שנוגעת בלימסול אורכת חצי יום בלבד — חוץ מהקטע לימסול-ונציה, שאורך יום שלם. ההפלגה הישירה בין פיראוס לונציה עצמן אורכת חצי יום בלבד. בהפלגות של יום ומעלה חולפים ימים אמיתיים, המחירים מתעדכנים, וריבית נצברת על הלוואות/חיסכון — בהפלגות חצי-יום כמעט שום דבר מזה לא מספיק להשתנות.
 
 מגבלת מסלולים לפיראוס ולונציה
-אי אפשר להפליג ישירות לפיראוס או לונציה, וגם לא לחזור מהם ישירות, לכל נמל אחר. חובה לעצור קודם באחד משלושת נמלי הציר: לימסול, איסטנבול או אלכסנדריה. גם הפלגה ישירה בין פיראוס לונציה עצמן אסורה. נמלים חסומים למסלול ישיר מסומנים במפה במעומעם.
+אי אפשר להפליג ישירות לפיראוס או לונציה, וגם לא לחזור מהם ישירות, מ/אל יפו או ביירות. חובה לעצור קודם באחד משלושת נמלי הציר: לימסול, איסטנבול או אלכסנדריה. הפלגה ישירה בין פיראוס לונציה עצמן כן מותרת (וקצרה — חצי יום). נמלים חסומים למסלול ישיר מסומנים במפה במעומעם.
+
+מנוחה בנמל
+כפתור "מנוחה" מדלג יום קדימה בלי להפליג: המחירים והריבית מתעדכנים בדיוק כמו ביום הפלגה רגיל, אבל בלי שום סיכון לאירועי דרך כי הספינה נשארת בנמל.
 
 פיראטים
 עלולה להופיע ספינת פיראטים. ניתן להילחם (תלוי בחיזוק הספינה), לברוח (תלוי במפרשים), או לשלם כופר ולהיפטר מהעימות מיד.
 
 אירועים בדרך
-סערה ושרטון עלולים לגרום לאובדן מטען ולעלות תיקון בזהב (שרטון תמיד גובה עלות תיקון). רוח גבית מקצרת את ההפלגה ביום. שדרוגי חיזוק מקטינים סיכוני נזק.
+סערה ושרטון עלולים לגרום לאובדן מטען ולעלות תיקון בזהב (שרטון תמיד גובה עלות תיקון). רוח גבית מקצרת את ההפלגה ביום. שמועות ביקוש מעלות דרמטית (אף פעם לא מורידות) מחיר של סחורה אקראית בנמל היעד שאליו אתם מפליגים. שדרוגי חיזוק מקטינים סיכוני נזק.
 
 עומס יתר
 ניתן לטעון עד פי 1.5 מהקיבולת הנקובה של הספינה, אך כל יום הפלגה בעומס יתר יש סיכון הולך וגדל לאובדן מטען עודף, ובמקרים חמורים גם נזק לספינה שדורש תיקון בזהב.
@@ -100,16 +103,19 @@ Trading
 "Buy"/"Sell" act on the chosen quantity. "Max" buys the largest amount you can afford that still fits the ship. "All" sells your entire held quantity of a good. Buying the max or selling all always shows a confirmation dialog first, and if the purchase would overload the ship, that warning appears inside the same confirmation dialog, before the purchase happens.
 
 Travel and time
-A regular voyage between two ports (neither of them Limassol) takes one day, and a voyage to/from Piraeus or Venice takes two days. Any leg touching Limassol takes only half a day -- except the Limassol-Venice leg, which takes a full day. On voyages of a day or more, real days pass: prices update, and interest accrues on loans/savings.
+A regular voyage between two ports (neither of them Limassol) takes one day, and a voyage between a hub port and Piraeus or Venice takes two days. Any leg touching Limassol takes only half a day -- except the Limassol-Venice leg, which takes a full day. The direct Piraeus-Venice crossing itself also takes only half a day. On voyages of a day or more, real days pass: prices update, and interest accrues on loans/savings -- on half-day legs, barely any of that has time to happen.
 
 Route restriction for Piraeus and Venice
-You cannot sail directly to Piraeus or Venice, or directly back from them, to/from any other port. You must first stop at one of the three hub ports: Limassol, Istanbul, or Alexandria. Direct travel between Piraeus and Venice themselves is also blocked. Ports you can't reach directly are shown dimmed on the map.
+You cannot sail directly to Piraeus or Venice, or directly back from them, to/from Jaffa or Beirut. You must first stop at one of the three hub ports: Limassol, Istanbul, or Alexandria. Direct travel between Piraeus and Venice themselves is allowed, and short (half a day). Ports you can't reach directly are shown dimmed on the map.
+
+Resting at port
+The "Rest" button skips a day forward without sailing anywhere: prices and interest update exactly like on a normal travel day, but with no risk of any travel event since the ship never leaves port.
 
 Pirates
 A pirate ship may appear during a voyage. You can fight (depends on hull upgrades), flee (depends on sail upgrades), or pay a ransom to end the encounter immediately.
 
 Events at sea
-Storms and running aground can cause cargo loss and a gold repair cost (running aground always costs a repair fee). A fair wind shortens the voyage by a day. Hull upgrades reduce damage risk.
+Storms and running aground can cause cargo loss and a gold repair cost (running aground always costs a repair fee). A fair wind shortens the voyage by a day. Rumors of high demand cause the price of a random good to spike dramatically (never drop) at the port you're actually sailing to. Hull upgrades reduce damage risk.
 
 Overload
 You can load up to 1.5x the ship's nominal capacity, but every day sailing overloaded carries a growing risk of losing excess cargo, and in severe cases hull damage requiring a gold repair.
