@@ -79,6 +79,17 @@ func _test_game_overlays() -> void:
 	instance.call("_close_overlay")
 	print("pirate encounter panel OK")
 
+	# Both cost-path wordings (gold vs. goods) must build without a format-
+	# string error (see the %s in capacity_offer_cost_gold).
+	instance.call("_on_capacity_offer_available") # no cargo aboard -> gold-cost wording
+	instance.call("_close_overlay")
+	GameState.gold = 100000
+	GameState.buy("silk", 50)
+	GameState.gold = 100
+	instance.call("_on_capacity_offer_available") # cargo now pricier than gold -> goods-cost wording
+	instance.call("_close_overlay")
+	print("capacity offer panel OK")
+
 	instance.call("_animate_ship_to", Vector2(100, 100), 1.0)
 	assert(instance.is_animating_travel == true)
 	print("ship travel animation start OK")

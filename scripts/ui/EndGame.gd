@@ -49,10 +49,10 @@ func _build_ui() -> void:
 		var player_name := name_edit.text.strip_edges()
 		if player_name == "":
 			player_name = "?"
-		SaveManager.add_highscore(player_name, net_worth)
+		var rank := SaveManager.add_highscore(player_name, net_worth)
 		saved = true
 		save_button.disabled = true
-		save_button.text = tr("endgame_score_saved")
+		save_button.text = (tr("endgame_rank_top10") % rank) if rank >= 1 else tr("endgame_score_saved")
 	)
 	vbox.add_child(save_button)
 

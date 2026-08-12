@@ -7,4 +7,4 @@ script = ExtResource("1")
 id = "wine"
 name_key = "good_wine"
 base_price = 35
-volatility = 0.2
+volatility = 0.4

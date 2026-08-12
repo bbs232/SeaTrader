@@ -61,6 +61,31 @@ func _initialize() -> void:
 		assert(guard < 20)
 	print("travel/events/overload stress (200 runs) OK")
 
+	# Ransom (pay/flee-caught) must never be 0 while the player still has gold
+	# to give -- int() floor used to round the demand down to a "free" 0-gold
+	# ransom whenever gold was low (e.g. after banking most of it in savings).
+	GameState.new_game(21, "jaffa")
+	for low_gold in [1, 2, 5, 10, 19, 50]:
+		for i in range(30):
+			GameState.gold = low_gold
+			GameState.pending_encounter = {"type": "pirates", "pirate_strength": 1.0}
+			var pay_result: Dictionary = GameState.resolve_pirate_encounter("pay")
+			assert(pay_result["ransom"] >= 1)
+			assert(GameState.gold >= 0)
+			GameState.gold = low_gold
+			GameState.pending_encounter = {"type": "pirates", "pirate_strength": 1.0}
+			var flee_result: Dictionary = GameState.resolve_pirate_encounter("flee")
+			if flee_result.get("outcome", "") == "caught":
+				assert(flee_result["ransom"] >= 1)
+			assert(GameState.gold >= 0)
+	# Flat broke (0 gold) is the one legitimate case where there's nothing to give.
+	GameState.gold = 0
+	GameState.pending_encounter = {"type": "pirates", "pirate_strength": 1.0}
+	var broke_result: Dictionary = GameState.resolve_pirate_encounter("pay")
+	assert(broke_result["ransom"] == 0)
+	assert(GameState.gold == 0)
+	print("pirate ransom never rounds down to free OK")
+
 	# Fixed travel durations: every pair in GameState.FULL_DAY_ROUTES is a
 	# full day (2), regardless of direction; everything else is half a day (1).
 	GameState.new_game(21, "jaffa")
@@ -224,6 +249,56 @@ func _initialize() -> void:
 	if max_loan > 0:
 		assert(GameState.bank_borrow(min(100, max_loan)))
 	print("bank OK")
+
+	# Special capacity offer: fires once per CAPACITY_OFFER_GOLD_STEP of gold
+	# reached (not again for the same milestone), grants a flat capacity
+	# bonus, and charges whichever of gold/goods (valued at the current port)
+	# is worth more.
+	GameState.new_game(21, "jaffa")
+	var offer_fired := [0] # boxed in an Array -- lambdas capture locals by value, not by reference
+	GameState.capacity_offer_available.connect(func(): offer_fired[0] += 1)
+	GameState.gold = GameState.CAPACITY_OFFER_GOLD_STEP - 1
+	GameState.rest_at_port() # day-tick, still below the threshold
+	assert(offer_fired[0] == 0)
+	GameState.gold = GameState.CAPACITY_OFFER_GOLD_STEP + 1
+	var cap_before: int = GameState.ship_capacity
+	var gold_before: int = GameState.gold
+	GameState.rest_at_port() # crosses the threshold -- offer fires exactly once
+	assert(offer_fired[0] == 1)
+	GameState.rest_at_port() # still above the same threshold -- must not refire
+	assert(offer_fired[0] == 1)
+	# No cargo aboard, so gold is necessarily the pricier 3% -- paid in gold.
+	GameState.accept_capacity_offer()
+	assert(GameState.ship_capacity == cap_before + GameState.CAPACITY_OFFER_CAPACITY_BONUS)
+	assert(GameState.gold == gold_before - int(ceil(gold_before * GameState.CAPACITY_OFFER_COST_RATIO)))
+
+	# Paying in goods instead, when the cargo aboard is worth more than 3% of gold.
+	GameState.new_game(21, "jaffa")
+	GameState.gold = 100000
+	assert(GameState.buy("silk", 50))
+	GameState.gold = 100
+	assert(GameState.get_capacity_offer_goods_value() > GameState.get_capacity_offer_gold_cost())
+	var cargo_before: int = GameState.cargo.get("silk", 0)
+	var cap_before2: int = GameState.ship_capacity
+	var gold_before2: int = GameState.gold
+	GameState.accept_capacity_offer()
+	assert(GameState.ship_capacity == cap_before2 + GameState.CAPACITY_OFFER_CAPACITY_BONUS)
+	assert(GameState.gold == gold_before2) # paid in goods, not gold
+	assert(GameState.cargo.get("silk", 0) < cargo_before)
+	print("capacity offer OK")
+
+	# The milestone must persist across save/load, or reloading a save already
+	# past a threshold would immediately re-offer on the next day-tick.
+	GameState.new_game(21, "jaffa")
+	GameState.gold = GameState.CAPACITY_OFFER_GOLD_STEP + 1
+	GameState.rest_at_port()
+	assert(GameState.capacity_offer_milestone == 1)
+	SaveManager.save_game()
+	GameState.capacity_offer_milestone = 0
+	assert(SaveManager.load_game())
+	assert(GameState.capacity_offer_milestone == 1)
+	SaveManager.delete_save()
+	print("capacity offer milestone persists across save/load OK")
 
 	# Save/Load round trip
 	SaveManager.save_game()

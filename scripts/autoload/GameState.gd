@@ -5,9 +5,10 @@ signal day_advanced(day: int)
 signal arrived_at_port(port_id: String, log: Array)
 signal pirate_encounter_started(details: Dictionary)
 signal game_ended(summary: Dictionary)
+signal capacity_offer_available()
 
 ## Bumped by one on every gameplay/UI update shipped, shown in the main menu footer.
-const GAME_VERSION := "1.5"
+const GAME_VERSION := "2.3"
 
 const STARTING_GOLD := 500
 const STARTING_CAPACITY := 85
@@ -20,10 +21,11 @@ const OVERLOAD_DAILY_RISK := 0.5 # scaled by how far over nominal capacity you a
 const SECURITY_SHIP_BASE_COST := 700 # cost of the first hired escort ship
 const SECURITY_SHIP_COST_STEP := 450 # extra cost added per escort ship already hired
 const SECURITY_SHIP_WIN_BONUS := 0.15 # flat pirate-fight win chance added per escort ship
-const NOTABLE_PRICE_CHANGE_MULT := 1.1 # overnight swing must be this many times a good's own volatility to flash a rest-day news message
+const NOTABLE_PRICE_CHANGE_RATIO := 0.4 # overnight swing must move a good's price by at least this fraction to flash a rest-day news message
 const NOTABLE_MIN_ABS_DELTA := 4 # and at least this many gold, so cheap goods don't "notably" swing on +-1 rounding noise
-const LOW_PRICE_FLOOR_RATIO := 0.5 # a price below this fraction of its anchor counts as "very low"
-const LOW_PRICE_MIN_RISE := 0.05 # very low prices are guaranteed at least this much of an overnight rise
+const PRICE_SHOCK_CHANCE := 0.01 # per port/good pair, each night: chance of a genuine demand shock overriding normal jitter
+const PRICE_SHOCK_MIN_RATIO := 0.7 # a shock moves the price by at least this fraction (up or down)...
+const PRICE_SHOCK_MAX_RATIO := 1.1 # ...up to this much -- comfortably past any good's routine per-good volatility, so shocks still read as distinct events
 const WAREHOUSE_MISHAP_CHANCE := 0.05 # per night resting at a port while carrying cargo
 const WAREHOUSE_MISHAP_MIN_LOSS := 0.10 # fraction of each cargo good lost to a warehouse fire/theft
 const WAREHOUSE_MISHAP_MAX_LOSS := 0.20
@@ -35,6 +37,9 @@ const PIRATE_LOOT_BIG_HAUL_CHANCE := 0.12 # rare chance for a single looted good
 const PIRATE_LOOT_BIG_HAUL_MULT_MIN := 4
 const PIRATE_LOOT_BIG_HAUL_MULT_MAX := 9
 const HALF_DAY_EVENT_SCALE := 0.5 # a half-day-only leg's event chance, relative to a full travel day's
+const CAPACITY_OFFER_GOLD_STEP := 10_000_000 # each multiple of gold reached unlocks a one-time special cargo-capacity offer
+const CAPACITY_OFFER_CAPACITY_BONUS := 10_000 # flat cargo-hold increase the offer grants, unconditionally
+const CAPACITY_OFFER_COST_RATIO := 0.03 # cost: 3% of gold or 3% of current cargo's value (whichever is worth more)
 
 var goods: Array[Good] = []
 var ports: Array[Port] = []
@@ -53,6 +58,9 @@ var security_ships: int = 0
 var owned_upgrades: Array[String] = []
 var loan: float = 0.0
 var savings: float = 0.0
+## Highest CAPACITY_OFFER_GOLD_STEP multiple already surfaced as a special
+## offer (see _check_capacity_offer), so each milestone only prompts once.
+var capacity_offer_milestone: int = 0
 
 var prices: Dictionary = {} # port_id -> { good_id -> int price }
 
@@ -169,6 +177,7 @@ func new_game(game_length: int = 21, start_port_id: String = "jaffa") -> void:
 	owned_upgrades.clear()
 	loan = 0.0
 	savings = 0.0
+	capacity_offer_milestone = 0
 	is_traveling = false
 	travel_destination_id = ""
 	travel_half_days_remaining = 0
@@ -188,22 +197,30 @@ func _init_prices() -> void:
 			port_prices[good.id] = _jitter_price(good.base_price * mod, good.volatility)
 		prices[port.id] = port_prices
 
-## Applies a random day-to-day walk to every port/good price, biased back toward the base price.
+## Redraws every port/good price for the new day from that port's own anchor
+## (base_price * the port's modifier for that good), not from yesterday's
+## price -- so each good has a stable "routine range" around its anchor that
+## the price returns to every day, instead of a random walk that can drift
+## away and stay drifted for days. Each port/good pair also has a small
+## independent chance of a demand "shock" that night (see PRICE_SHOCK_CHANCE):
+## a much larger, guaranteed-dramatic move away from the anchor. Because
+## tomorrow's price is drawn from the anchor again rather than from tonight's
+## shocked price, a shock is always a single-day event that snaps back to the
+## routine range the very next day.
 func _update_prices() -> void:
 	for port in ports:
 		var port_prices: Dictionary = prices[port.id]
 		for good in goods:
 			var mod: float = port.price_modifiers.get(good.id, 1.0)
 			var anchor: float = good.base_price * mod
-			var current: float = port_prices[good.id]
-			var pulled: float = lerp(current, anchor, 0.15)
-			var new_price := _jitter_price(pulled, good.volatility)
-			# A price that's crashed well below its anchor (e.g. wheat at 5 in
-			# Piraeus) is otherwise still just as likely to jitter down again
-			# as up; force at least a small rise so a bottomed-out price
-			# reliably recovers instead of occasionally lingering at the floor.
-			if current < anchor * LOW_PRICE_FLOOR_RATIO:
-				new_price = max(new_price, int(ceil(current * (1.0 + LOW_PRICE_MIN_RISE))))
+			var new_price: int
+			if randf() < PRICE_SHOCK_CHANCE:
+				var shock_ratio := randf_range(PRICE_SHOCK_MIN_RATIO, PRICE_SHOCK_MAX_RATIO)
+				if randf() < 0.5:
+					shock_ratio = -shock_ratio
+				new_price = max(1, int(round(anchor * (1.0 + shock_ratio))))
+			else:
+				new_price = _jitter_price(anchor, good.volatility)
 			port_prices[good.id] = new_price
 
 func _jitter_price(anchor: float, volatility: float) -> int:
@@ -285,6 +302,23 @@ func get_cargo_value_at_current_port() -> int:
 	for good_id in cargo.keys():
 		total += get_price(current_port_id, good_id) * cargo[good_id]
 	return total
+
+## --- Special capacity offer ---
+
+func get_capacity_offer_gold_cost() -> int:
+	return int(ceil(gold * CAPACITY_OFFER_COST_RATIO))
+
+func get_capacity_offer_goods_value() -> int:
+	return int(ceil(get_cargo_value_at_current_port() * CAPACITY_OFFER_COST_RATIO))
+
+## The capacity bonus is unconditional -- payment is taken in whichever of
+## gold or goods (valued at the current port) is worth more, never both.
+func accept_capacity_offer() -> void:
+	if get_capacity_offer_goods_value() > get_capacity_offer_gold_cost():
+		_jettison_cargo(CAPACITY_OFFER_COST_RATIO)
+	else:
+		gold -= get_capacity_offer_gold_cost()
+	ship_capacity += CAPACITY_OFFER_CAPACITY_BONUS
 
 ## --- Ship upgrades ---
 
@@ -484,14 +518,15 @@ func _snapshot_prices() -> Dictionary:
 	return snap
 
 ## Picks the single most notable overnight price swing (across every
-## port/good pair) for the rest-day news flash: a swing counts only once it's
-## at least NOTABLE_PRICE_CHANGE_MULT times that good's own normal volatility,
-## so a jumpy good (e.g. spices) needs a genuinely unusual move to make the
-## news just as much as a calm one (e.g. olives) does, rather than volatile
-## goods triggering it almost every day. Returns {} if nothing qualified.
+## port/good pair) for the rest-day news flash: a swing counts only once it
+## moves the price by at least NOTABLE_PRICE_CHANGE_RATIO, a flat threshold
+## applied the same way regardless of the good's own normal volatility, so
+## the "spiked" wording always corresponds to a genuinely large move rather
+## than a routine one for a jumpy good like spices. Returns {} if nothing
+## qualified.
 func _find_notable_price_change(before: Dictionary) -> Dictionary:
 	var best := {}
-	var best_severity := 1.0 # must exceed 1.0 (i.e. clear its own threshold) to count at all
+	var best_ratio := 0.0
 	for port_id in prices.keys():
 		var before_port: Dictionary = before.get(port_id, {})
 		var after_port: Dictionary = prices[port_id]
@@ -500,13 +535,11 @@ func _find_notable_price_change(before: Dictionary) -> Dictionary:
 			var new_price: int = after_port[good_id]
 			if old_price <= 0 or absi(new_price - old_price) < NOTABLE_MIN_ABS_DELTA:
 				continue # ignore +-1/2 gold rounding noise on cheap goods, even if it's a big % swing
-			var good := get_good(good_id)
-			if good == null or good.volatility <= 0.0:
-				continue
 			var ratio := float(new_price - old_price) / float(old_price)
-			var severity := absf(ratio) / (good.volatility * NOTABLE_PRICE_CHANGE_MULT)
-			if severity > best_severity:
-				best_severity = severity
+			if absf(ratio) < NOTABLE_PRICE_CHANGE_RATIO:
+				continue
+			if absf(ratio) > best_ratio:
+				best_ratio = absf(ratio)
 				best = {"port_id": port_id, "good_id": good_id, "old_price": old_price, "new_price": new_price, "ratio": ratio}
 	return best
 
@@ -514,9 +547,19 @@ func _advance_day() -> void:
 	current_day += 1
 	_update_prices()
 	_apply_daily_interest()
+	_check_capacity_offer()
 	day_advanced.emit(current_day)
 	if current_day > game_length_days:
 		_end_game()
+
+## Every CAPACITY_OFFER_GOLD_STEP of gold reached (10M, 20M, ...) unlocks a
+## one-time special offer to expand cargo capacity; capacity_offer_milestone
+## tracks the highest one already surfaced so it only fires once per step.
+func _check_capacity_offer() -> void:
+	var milestone := int(gold) / CAPACITY_OFFER_GOLD_STEP
+	if milestone > capacity_offer_milestone:
+		capacity_offer_milestone = milestone
+		capacity_offer_available.emit()
 
 func _roll_travel_event() -> void:
 	var from_port := get_port(current_port_id)
@@ -642,6 +685,15 @@ func _start_pirate_encounter() -> void:
 	}
 	pirate_encounter_started.emit(pending_encounter)
 
+## Rolls a ransom as a fraction of the player's current gold. Floors at 1
+## (never rounds down to a "free" 0-gold ransom just because the player is
+## carrying little cash, e.g. after banking most of it in savings) and caps
+## at whatever gold the player actually has (0 if they're flat broke).
+func _roll_ransom(min_ratio: float, max_ratio: float) -> int:
+	if gold <= 0:
+		return 0
+	return min(gold, max(1, int(ceil(gold * randf_range(min_ratio, max_ratio)))))
+
 ## choice: "fight" | "flee" | "pay"
 func resolve_pirate_encounter(choice: String) -> Dictionary:
 	if pending_encounter.is_empty():
@@ -672,12 +724,12 @@ func resolve_pirate_encounter(choice: String) -> Dictionary:
 			if randf() < flee_chance:
 				result["outcome"] = "escaped"
 			else:
-				var ransom := int(gold * randf_range(0.1, 0.25))
+				var ransom := _roll_ransom(0.1, 0.25)
 				gold -= ransom
 				result["outcome"] = "caught"
 				result["ransom"] = ransom
 		"pay":
-			var demand := int(gold * randf_range(0.05, 0.15))
+			var demand := _roll_ransom(0.05, 0.15)
 			gold -= demand
 			result["outcome"] = "paid"
 			result["ransom"] = demand

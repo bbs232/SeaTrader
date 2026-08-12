@@ -7,4 +7,4 @@ script = ExtResource("1")
 id = "silk"
 name_key = "good_silk"
 base_price = 120
-volatility = 0.3
+volatility = 0.55

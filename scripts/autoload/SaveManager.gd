@@ -23,6 +23,7 @@ func save_game() -> void:
 		"loan": GameState.loan,
 		"savings": GameState.savings,
 		"prices": GameState.prices,
+		"capacity_offer_milestone": GameState.capacity_offer_milestone,
 	}
 	var file := FileAccess.open(SAVE_PATH, FileAccess.WRITE)
 	if file:
@@ -58,6 +59,7 @@ func load_game() -> bool:
 	GameState.loan = parsed.get("loan", 0.0)
 	GameState.savings = parsed.get("savings", 0.0)
 	GameState.prices = parsed.get("prices", {})
+	GameState.capacity_offer_milestone = parsed.get("capacity_offer_milestone", 0)
 	GameState.is_traveling = false
 	GameState.pending_encounter.clear()
 	return true
@@ -79,17 +81,23 @@ func get_highscores() -> Array:
 		return []
 	return parsed
 
-func add_highscore(player_name: String, net_worth: int) -> void:
+## Saves the score and returns its 1-based rank in the (post-save) top-10
+## list, or -1 if it didn't place high enough to make the cut.
+func add_highscore(player_name: String, net_worth: int) -> int:
 	var scores := get_highscores()
-	scores.append({
+	var entry := {
 		"name": player_name,
 		"net_worth": net_worth,
+		"days": GameState.game_length_days,
 		"date": Time.get_date_string_from_system() + " " + Time.get_time_string_from_system().substr(0, 5),
-	})
+	}
+	scores.append(entry)
 	scores.sort_custom(func(a, b): return a["net_worth"] > b["net_worth"])
+	var rank := scores.find(entry) + 1
 	if scores.size() > MAX_HIGHSCORES:
 		scores.resize(MAX_HIGHSCORES)
 	var file := FileAccess.open(HIGHSCORES_PATH, FileAccess.WRITE)
 	if file:
 		file.store_string(JSON.stringify(scores))
 		file.close()
+	return rank if rank <= MAX_HIGHSCORES else -1

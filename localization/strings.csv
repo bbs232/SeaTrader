@@ -12,6 +12,7 @@ new_game_pick_length,בחר אורך משחק,Choose Game Length
 length_short,קצר (10 ימים),Short (10 days)
 length_medium,בינוני (21 ימים),Medium (21 days)
 length_long,ארוך (35 ימים),Long (35 days)
+length_unknown,אורך לא ידוע,Unknown length
 cancel,ביטול,Cancel
 highscores_title,לוח השיאים,High Scores
 highscores_empty,אין עדיין שיאים,No scores yet
@@ -70,6 +71,14 @@ shipyard_owned,ברשותך,Owned
 shipyard_locked,נעול,Locked
 menu_resume,חזרה למשחק,Resume
 menu_save_exit,שמור וצא לתפריט,Save & Exit to Menu
+menu_restart,התחל משחק מחדש,Restart Game
+confirm_restart,להתחיל את המשחק מחדש? כל התקדמות שלא נשמרה תאבד.,Restart the game? Any unsaved progress will be lost.
+capacity_offer_title,הזדמנות מיוחדת!,Special Opportunity!
+capacity_offer_desc,סוחר עשיר פונה אליך בהצעה להרחיב את מחסן הספינה שלך ב-%s יחידות קיבולת -- ללא תנאים.,A wealthy merchant offers to expand your ship's hold by %s capacity units -- no conditions attached.
+capacity_offer_cost_gold,המחיר: %s זהב (3 אחוזים מהונך).,The price: %s gold (3 percent of your wealth).
+capacity_offer_cost_goods,המחיר: 3 אחוזים מהסחורה במחסן הספינה (שווים יותר מ-3 אחוזים מהזהב שלך).,The price: 3 percent of the cargo in your hold (worth more than 3 percent of your gold).
+capacity_offer_accept,קבל את ההצעה,Accept the Offer
+capacity_offer_decline,סרב,Decline
 pirates_title,פיראטים!,Pirates!
 pirates_desc,ספינת פיראטים מתקרבת. מה תעשה?,A pirate ship approaches. What will you do?
 pirates_fight,הילחם,Fight
@@ -103,6 +112,7 @@ endgame_enter_name,הזן את שמך לשמירת השיא:,Enter your name to 
 endgame_name_placeholder,השם שלך,Your name
 endgame_save_score,שמור שיא,Save Score
 endgame_score_saved,השיא נשמר!,Score Saved!
+endgame_rank_top10,נכנסת לעשרת הגדולים! אתה במקום ה-%d,You made the top 10! You're in position #%d
 endgame_to_menu,לתפריט הראשי,Main Menu
 good_copper,נחושת,Copper
 good_olives,זיתים,Olives

@@ -146,13 +146,23 @@ func _on_highscores_pressed() -> void:
 	else:
 		var i := 1
 		for entry in scores:
-			var line := "%d. %s — %s (%s)" % [i, entry.get("name", "?"), UIUtil.format_gold(entry.get("net_worth", 0)), entry.get("date", "")]
+			var line := "%d. %s — %s — %s (%s)" % [i, entry.get("name", "?"), UIUtil.format_gold(entry.get("net_worth", 0)), _length_label(entry.get("days", 0)), entry.get("date", "")]
 			vbox.add_child(UIUtil.make_label(line, 18))
 			i += 1
 
 	var btn_close := UIUtil.make_button(tr("close"))
 	btn_close.pressed.connect(func(): _highscores_layer.queue_free())
 	vbox.add_child(btn_close)
+
+## Maps a saved score's game length (in days) to its display label, so the
+## high-score table shows what the run was measured against. Older scores
+## saved before this field existed fall back to "unknown length".
+func _length_label(days: int) -> String:
+	match days:
+		10: return tr("length_short")
+		21: return tr("length_medium")
+		35: return tr("length_long")
+		_: return tr("length_unknown")
 
 func _on_rules_pressed() -> void:
 	var layer := CanvasLayer.new()

@@ -7,4 +7,4 @@ script = ExtResource("1")
 id = "copper"
 name_key = "good_copper"
 base_price = 40
-volatility = 0.2
+volatility = 0.4

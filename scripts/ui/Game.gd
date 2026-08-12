@@ -1,6 +1,13 @@
 extends Control
 
 const SHIP_ICON_SIZE := Vector2(90, 90)
+## Ships dock a bit to the left (out to sea) of the port marker's anchor icon
+## instead of centered on it, so the ship never covers the marker itself or
+## the port name label (which sits below the marker). An offset straight up
+## is ambiguous when two ports are stacked close together on the coastline
+## (can't tell which one the ship is docked at); offsetting sideways keeps it
+## unambiguously level with its port.
+const SHIP_PORT_OFFSET := Vector2(-70, 0)
 
 var map_layer: Control
 var hud_layer: Control
@@ -26,6 +33,7 @@ func _ready() -> void:
 	GameState.arrived_at_port.connect(_on_arrived_at_port)
 	GameState.pirate_encounter_started.connect(_on_pirate_encounter_started)
 	GameState.game_ended.connect(_on_game_ended)
+	GameState.capacity_offer_available.connect(_on_capacity_offer_available)
 	_build_ui()
 
 func _build_ui() -> void:
@@ -142,7 +150,7 @@ func _refresh_all() -> void:
 	]
 	map_bg.modulate = _time_of_day_tint()
 	if port and not is_animating_travel:
-		ship_icon.position = port.map_position - SHIP_ICON_SIZE / 2
+		ship_icon.position = port.map_position + SHIP_PORT_OFFSET - SHIP_ICON_SIZE / 2
 	dock_panel.visible = not GameState.is_traveling and not is_animating_travel and not is_resting
 	_update_port_marker_states()
 
@@ -275,7 +283,7 @@ func _format_notable_price_change(details: Dictionary) -> String:
 ## no matter how many encounters happened along the route.
 
 func _animate_ship_to(map_pos: Vector2, fraction: float = 1.0) -> void:
-	var target := map_pos - SHIP_ICON_SIZE / 2
+	var target := map_pos + SHIP_PORT_OFFSET - SHIP_ICON_SIZE / 2
 	var start: Vector2 = ship_icon.position
 	var leg_target: Vector2 = start.lerp(target, fraction)
 	var duration: float = clamp(start.distance_to(leg_target) / 220.0, 0.4, 2.2)
@@ -501,6 +509,16 @@ func _open_trade_panel() -> void:
 
 	refresh_status.call()
 
+	# Every good's Buy/Max button depends on current gold, and every good's
+	# cargo-overload check depends on total cargo used -- both change on any
+	# trade, not just the row that was clicked. So a trade in one row has to
+	# refresh every row's buttons, not just its own, or another row's now-
+	# affordable "Buy" can stay stuck disabled until the panel is reopened.
+	var row_refreshers: Array[Callable] = []
+	var refresh_all_rows := func():
+		for refresher in row_refreshers:
+			refresher.call()
+
 	for good in GameState.goods:
 		var row := HBoxContainer.new()
 		row.add_theme_constant_override("separation", 10)
@@ -560,6 +578,7 @@ func _open_trade_panel() -> void:
 			btn_sell_all.disabled = owned <= 0
 
 		refresh_row.call()
+		row_refreshers.append(refresh_row)
 
 		btn_amount.pressed.connect(func():
 			_open_quantity_dialog(qty_box[0], func(new_qty: int):
@@ -569,7 +588,7 @@ func _open_trade_panel() -> void:
 		)
 		btn_buy.pressed.connect(func():
 			_confirm_and_buy(good, qty_box[0], func():
-				refresh_row.call()
+				refresh_all_rows.call()
 				refresh_status.call()
 			)
 		)
@@ -578,7 +597,7 @@ func _open_trade_panel() -> void:
 			_confirm_and_buy(good, max_buy, func():
 				qty_box[0] = max_buy
 				btn_amount.text = str(max_buy)
-				refresh_row.call()
+				refresh_all_rows.call()
 				refresh_status.call()
 			)
 		)
@@ -587,13 +606,13 @@ func _open_trade_panel() -> void:
 			_confirm_and_buy(good, max_buy, func():
 				qty_box[0] = max_buy
 				btn_amount.text = str(max_buy)
-				refresh_row.call()
+				refresh_all_rows.call()
 				refresh_status.call()
 			)
 		)
 		btn_sell.pressed.connect(func():
 			if GameState.sell(good.id, qty_box[0]):
-				refresh_row.call()
+				refresh_all_rows.call()
 				refresh_status.call()
 		)
 		btn_sell_all.pressed.connect(func():
@@ -605,7 +624,7 @@ func _open_trade_panel() -> void:
 				if GameState.sell(good.id, owned):
 					qty_box[0] = 1
 					btn_amount.text = "1"
-					refresh_row.call()
+					refresh_all_rows.call()
 					refresh_status.call()
 			)
 		)
@@ -727,6 +746,15 @@ func _open_shipyard_panel() -> void:
 
 	vbox.add_child(UIUtil.make_title(tr("shipyard_title"), 26))
 
+	# Buying one upgrade changes gold (affects every other row's afford
+	# check) and, for cargo tiers, ship_capacity (affects the "resulting
+	# total" preview shown on every other cargo row) -- so a purchase has to
+	# refresh every row, not just its own.
+	var row_refreshers: Array[Callable] = []
+	var refresh_all_rows := func():
+		for refresher in row_refreshers:
+			refresher.call()
+
 	for up in GameState.upgrades:
 		var row := HBoxContainer.new()
 		row.add_theme_constant_override("separation", 10)
@@ -765,9 +793,10 @@ func _open_shipyard_panel() -> void:
 				btn_buy.disabled = not GameState.can_buy_upgrade(up.id)
 
 		refresh_row.call()
+		row_refreshers.append(refresh_row)
 		btn_buy.pressed.connect(func():
 			if GameState.buy_upgrade(up.id):
-				refresh_row.call()
+				refresh_all_rows.call()
 		)
 
 	var sep := HSeparator.new()
@@ -794,9 +823,10 @@ func _open_shipyard_panel() -> void:
 		btn_hire.disabled = not GameState.can_hire_security_ship()
 
 	refresh_sec.call()
+	row_refreshers.append(refresh_sec) # hiring a ship spends gold too, same as buying an upgrade
 	btn_hire.pressed.connect(func():
 		if GameState.hire_security_ship():
-			refresh_sec.call()
+			refresh_all_rows.call()
 	)
 
 	var sec_hint := UIUtil.make_label(tr("shipyard_security_hint"), 13, Color("#CFE8F2"))
@@ -894,6 +924,15 @@ func _on_menu_pressed() -> void:
 	)
 	vbox.add_child(btn_save_exit)
 
+	var btn_restart := UIUtil.make_button(tr("menu_restart"))
+	btn_restart.pressed.connect(func():
+		_show_confirm(tr("confirm_restart"), func():
+			GameState.new_game(GameState.game_length_days, "jaffa")
+			get_tree().reload_current_scene()
+		)
+	)
+	vbox.add_child(btn_restart)
+
 ## --- Pirate encounter ---
 
 func _on_pirate_encounter_started(_details: Dictionary) -> void:
@@ -957,6 +996,39 @@ func _format_pirate_result(result: Dictionary) -> String:
 			return tr("log_pirates_paid") % UIUtil.format_gold(result.get("ransom", 0))
 		_:
 			return ""
+
+## --- Special capacity offer ---
+
+func _on_capacity_offer_available() -> void:
+	var gold_cost := GameState.get_capacity_offer_gold_cost()
+	var goods_value := GameState.get_capacity_offer_goods_value()
+	var pay_with_goods := goods_value > gold_cost
+
+	var panel := _open_overlay()
+	var vbox := VBoxContainer.new()
+	vbox.custom_minimum_size = Vector2(380, 0)
+	vbox.add_theme_constant_override("separation", 12)
+	panel.add_child(vbox)
+
+	vbox.add_child(UIUtil.make_title(tr("capacity_offer_title"), 22))
+	vbox.add_child(UIUtil.make_label(tr("capacity_offer_desc") % UIUtil.format_gold(GameState.CAPACITY_OFFER_CAPACITY_BONUS), 16))
+	var cost_text: String
+	if pay_with_goods:
+		cost_text = tr("capacity_offer_cost_goods")
+	else:
+		cost_text = tr("capacity_offer_cost_gold") % UIUtil.format_gold(gold_cost)
+	vbox.add_child(UIUtil.make_label(cost_text, 16))
+
+	var btn_accept := UIUtil.make_button(tr("capacity_offer_accept"))
+	btn_accept.pressed.connect(func():
+		GameState.accept_capacity_offer()
+		_close_specific_overlay(panel)
+	)
+	vbox.add_child(btn_accept)
+
+	var btn_decline := UIUtil.make_button(tr("capacity_offer_decline"))
+	btn_decline.pressed.connect(func(): _close_specific_overlay(panel))
+	vbox.add_child(btn_decline)
 
 ## --- Arrival / travel report ---
 
