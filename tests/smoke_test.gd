@@ -250,23 +250,23 @@ func _initialize() -> void:
 		assert(GameState.bank_borrow(min(100, max_loan)))
 	print("bank OK")
 
-	# Special capacity offer: fires once per CAPACITY_OFFER_GOLD_STEP of gold
-	# reached (not again for the same milestone), grants a flat capacity
-	# bonus, and charges whichever of gold/goods (valued at the current port)
-	# is worth more.
+	# Special capacity offer: fires the instant gold ever reaches a
+	# CAPACITY_OFFER_GOLD_STEP milestone (no day-tick needed, same as the
+	# millionaire gift below), never again for the same milestone, grants a
+	# flat capacity bonus, and charges whichever of gold/goods (valued at the
+	# current port) is worth more.
 	GameState.new_game(21, "jaffa")
 	var offer_fired := [0] # boxed in an Array -- lambdas capture locals by value, not by reference
 	GameState.capacity_offer_available.connect(func(): offer_fired[0] += 1)
 	GameState.gold = GameState.CAPACITY_OFFER_GOLD_STEP - 1
-	GameState.rest_at_port() # day-tick, still below the threshold
 	assert(offer_fired[0] == 0)
-	GameState.gold = GameState.CAPACITY_OFFER_GOLD_STEP + 1
+	GameState.gold = GameState.CAPACITY_OFFER_GOLD_STEP + 1 # crosses the threshold -- offer fires exactly once, immediately
 	var cap_before: int = GameState.ship_capacity
 	var gold_before: int = GameState.gold
-	GameState.rest_at_port() # crosses the threshold -- offer fires exactly once
 	assert(offer_fired[0] == 1)
-	GameState.rest_at_port() # still above the same threshold -- must not refire
+	GameState.gold += 500 # still above the same threshold -- must not refire
 	assert(offer_fired[0] == 1)
+	gold_before = GameState.gold
 	# No cargo aboard, so gold is necessarily the pricier 3% -- paid in gold.
 	GameState.accept_capacity_offer()
 	assert(GameState.ship_capacity == cap_before + GameState.CAPACITY_OFFER_CAPACITY_BONUS)
@@ -288,10 +288,9 @@ func _initialize() -> void:
 	print("capacity offer OK")
 
 	# The milestone must persist across save/load, or reloading a save already
-	# past a threshold would immediately re-offer on the next day-tick.
+	# past a threshold would immediately re-offer.
 	GameState.new_game(21, "jaffa")
 	GameState.gold = GameState.CAPACITY_OFFER_GOLD_STEP + 1
-	GameState.rest_at_port()
 	assert(GameState.capacity_offer_milestone == 1)
 	SaveManager.save_game()
 	GameState.capacity_offer_milestone = 0

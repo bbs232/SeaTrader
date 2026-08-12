@@ -9,7 +9,7 @@ signal capacity_offer_available()
 signal millionaire_gift_granted()
 
 ## Bumped by one on every gameplay/UI update shipped, shown in the main menu footer.
-const GAME_VERSION := "2.5"
+const GAME_VERSION := "2.6"
 
 const STARTING_GOLD := 500
 const STARTING_CAPACITY := 85
@@ -55,6 +55,7 @@ var gold: int = STARTING_GOLD:
 	set(value):
 		gold = value
 		_check_millionaire_gift()
+		_check_capacity_offer()
 var current_port_id: String = ""
 var cargo: Dictionary = {} # good_id -> int quantity
 var ship_capacity: int = STARTING_CAPACITY
@@ -557,7 +558,6 @@ func _advance_day() -> void:
 	current_day += 1
 	_update_prices()
 	_apply_daily_interest()
-	_check_capacity_offer()
 	day_advanced.emit(current_day)
 	if current_day > game_length_days:
 		_end_game()
@@ -565,6 +565,8 @@ func _advance_day() -> void:
 ## Every CAPACITY_OFFER_GOLD_STEP of gold reached (10M, 20M, ...) unlocks a
 ## one-time special offer to expand cargo capacity; capacity_offer_milestone
 ## tracks the highest one already surfaced so it only fires once per step.
+## Checked on every gold change (see the gold setter), same as
+## _check_millionaire_gift, so it fires the moment the milestone is crossed.
 func _check_capacity_offer() -> void:
 	var milestone := int(gold) / CAPACITY_OFFER_GOLD_STEP
 	if milestone > capacity_offer_milestone:
