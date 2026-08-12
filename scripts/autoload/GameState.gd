@@ -9,7 +9,7 @@ signal capacity_offer_available()
 signal millionaire_gift_granted()
 
 ## Bumped by one on every gameplay/UI update shipped, shown in the main menu footer.
-const GAME_VERSION := "2.4"
+const GAME_VERSION := "2.5"
 
 const STARTING_GOLD := 500
 const STARTING_CAPACITY := 85
@@ -39,10 +39,10 @@ const PIRATE_LOOT_BIG_HAUL_MULT_MIN := 4
 const PIRATE_LOOT_BIG_HAUL_MULT_MAX := 9
 const HALF_DAY_EVENT_SCALE := 0.5 # a half-day-only leg's event chance, relative to a full travel day's
 const CAPACITY_OFFER_GOLD_STEP := 10_000_000 # each multiple of gold reached unlocks a one-time special cargo-capacity offer
-const CAPACITY_OFFER_CAPACITY_BONUS := 10_000 # flat cargo-hold increase the offer grants, unconditionally
+const CAPACITY_OFFER_CAPACITY_BONUS := 100_000 # flat cargo-hold increase the offer grants, unconditionally
 const CAPACITY_OFFER_COST_RATIO := 0.03 # cost: 3% of gold or 3% of current cargo's value (whichever is worth more)
 const MILLIONAIRE_GIFT_GOLD_THRESHOLD := 1_000_000 # one-time free warehouse gift once gold ever reaches this
-const MILLIONAIRE_GIFT_CAPACITY_BONUS := 10_000 # flat cargo-hold increase granted unconditionally, no cost
+const MILLIONAIRE_GIFT_CAPACITY_BONUS := 100_000 # flat cargo-hold increase granted unconditionally, no cost
 
 var goods: Array[Good] = []
 var ports: Array[Port] = []
