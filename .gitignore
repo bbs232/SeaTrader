@@ -3,7 +3,9 @@
 /android/
 
 # Build outputs (produced locally / by CI, not committed)
-/builds/
+/builds/*
+# Except the Web export, which is committed and published via GitHub Pages
+!/builds/web/
 
 # Godot mono/logs
 .mono/
