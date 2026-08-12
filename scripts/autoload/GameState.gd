@@ -6,9 +6,10 @@ signal arrived_at_port(port_id: String, log: Array)
 signal pirate_encounter_started(details: Dictionary)
 signal game_ended(summary: Dictionary)
 signal capacity_offer_available()
+signal millionaire_gift_granted()
 
 ## Bumped by one on every gameplay/UI update shipped, shown in the main menu footer.
-const GAME_VERSION := "2.3"
+const GAME_VERSION := "2.4"
 
 const STARTING_GOLD := 500
 const STARTING_CAPACITY := 85
@@ -40,6 +41,8 @@ const HALF_DAY_EVENT_SCALE := 0.5 # a half-day-only leg's event chance, relative
 const CAPACITY_OFFER_GOLD_STEP := 10_000_000 # each multiple of gold reached unlocks a one-time special cargo-capacity offer
 const CAPACITY_OFFER_CAPACITY_BONUS := 10_000 # flat cargo-hold increase the offer grants, unconditionally
 const CAPACITY_OFFER_COST_RATIO := 0.03 # cost: 3% of gold or 3% of current cargo's value (whichever is worth more)
+const MILLIONAIRE_GIFT_GOLD_THRESHOLD := 1_000_000 # one-time free warehouse gift once gold ever reaches this
+const MILLIONAIRE_GIFT_CAPACITY_BONUS := 10_000 # flat cargo-hold increase granted unconditionally, no cost
 
 var goods: Array[Good] = []
 var ports: Array[Port] = []
@@ -48,7 +51,10 @@ var events: Array[EventDef] = []
 
 var game_length_days: int = 21
 var current_day: int = 1
-var gold: int = STARTING_GOLD
+var gold: int = STARTING_GOLD:
+	set(value):
+		gold = value
+		_check_millionaire_gift()
 var current_port_id: String = ""
 var cargo: Dictionary = {} # good_id -> int quantity
 var ship_capacity: int = STARTING_CAPACITY
@@ -61,6 +67,9 @@ var savings: float = 0.0
 ## Highest CAPACITY_OFFER_GOLD_STEP multiple already surfaced as a special
 ## offer (see _check_capacity_offer), so each milestone only prompts once.
 var capacity_offer_milestone: int = 0
+## Whether the one-time MILLIONAIRE_GIFT_GOLD_THRESHOLD warehouse gift has
+## already been granted (see _check_millionaire_gift), so it only fires once.
+var millionaire_gift_claimed: bool = false
 
 var prices: Dictionary = {} # port_id -> { good_id -> int price }
 
@@ -178,6 +187,7 @@ func new_game(game_length: int = 21, start_port_id: String = "jaffa") -> void:
 	loan = 0.0
 	savings = 0.0
 	capacity_offer_milestone = 0
+	millionaire_gift_claimed = false
 	is_traveling = false
 	travel_destination_id = ""
 	travel_half_days_remaining = 0
@@ -560,6 +570,17 @@ func _check_capacity_offer() -> void:
 	if milestone > capacity_offer_milestone:
 		capacity_offer_milestone = milestone
 		capacity_offer_available.emit()
+
+## The first time gold ever reaches MILLIONAIRE_GIFT_GOLD_THRESHOLD, the
+## player's warehouse is expanded for free as a one-time congratulatory gift.
+## Checked on every gold change (see the gold setter) so it fires the moment
+## the milestone is crossed, not just at the next day boundary.
+func _check_millionaire_gift() -> void:
+	if millionaire_gift_claimed or gold < MILLIONAIRE_GIFT_GOLD_THRESHOLD:
+		return
+	millionaire_gift_claimed = true
+	ship_capacity += MILLIONAIRE_GIFT_CAPACITY_BONUS
+	millionaire_gift_granted.emit()
 
 func _roll_travel_event() -> void:
 	var from_port := get_port(current_port_id)

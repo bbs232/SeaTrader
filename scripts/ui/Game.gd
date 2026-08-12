@@ -34,6 +34,7 @@ func _ready() -> void:
 	GameState.pirate_encounter_started.connect(_on_pirate_encounter_started)
 	GameState.game_ended.connect(_on_game_ended)
 	GameState.capacity_offer_available.connect(_on_capacity_offer_available)
+	GameState.millionaire_gift_granted.connect(_on_millionaire_gift_granted)
 	_build_ui()
 
 func _build_ui() -> void:
@@ -1029,6 +1030,11 @@ func _on_capacity_offer_available() -> void:
 	var btn_decline := UIUtil.make_button(tr("capacity_offer_decline"))
 	btn_decline.pressed.connect(func(): _close_specific_overlay(panel))
 	vbox.add_child(btn_decline)
+
+## --- Millionaire warehouse gift ---
+
+func _on_millionaire_gift_granted() -> void:
+	_show_message(tr("millionaire_gift_message") % UIUtil.format_gold(GameState.MILLIONAIRE_GIFT_CAPACITY_BONUS))
 
 ## --- Arrival / travel report ---
 

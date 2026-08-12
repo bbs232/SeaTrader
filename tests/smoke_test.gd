@@ -300,6 +300,31 @@ func _initialize() -> void:
 	SaveManager.delete_save()
 	print("capacity offer milestone persists across save/load OK")
 
+	# Millionaire warehouse gift: a one-time free capacity bonus the instant
+	# gold ever reaches MILLIONAIRE_GIFT_GOLD_THRESHOLD (no day-tick needed,
+	# unlike the paid capacity offer above), never granted twice.
+	GameState.new_game(21, "jaffa")
+	var gift_fired := [0] # boxed in an Array -- lambdas capture locals by value, not by reference
+	GameState.millionaire_gift_granted.connect(func(): gift_fired[0] += 1)
+	GameState.gold = GameState.MILLIONAIRE_GIFT_GOLD_THRESHOLD - 1
+	assert(gift_fired[0] == 0)
+	var mg_cap_before: int = GameState.ship_capacity
+	GameState.gold = GameState.MILLIONAIRE_GIFT_GOLD_THRESHOLD
+	assert(gift_fired[0] == 1)
+	assert(GameState.ship_capacity == mg_cap_before + GameState.MILLIONAIRE_GIFT_CAPACITY_BONUS)
+	GameState.gold += 500 # still above threshold -- must not refire
+	assert(gift_fired[0] == 1)
+	assert(GameState.ship_capacity == mg_cap_before + GameState.MILLIONAIRE_GIFT_CAPACITY_BONUS)
+	# Claimed flag must persist across save/load, or reloading a save already
+	# past the threshold would double-grant the capacity bonus.
+	SaveManager.save_game()
+	var mg_cap_after: int = GameState.ship_capacity
+	assert(SaveManager.load_game())
+	assert(GameState.millionaire_gift_claimed)
+	assert(GameState.ship_capacity == mg_cap_after)
+	SaveManager.delete_save()
+	print("millionaire warehouse gift OK")
+
 	# Save/Load round trip
 	SaveManager.save_game()
 	assert(SaveManager.has_save())

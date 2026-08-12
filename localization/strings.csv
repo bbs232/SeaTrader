@@ -79,6 +79,7 @@ capacity_offer_cost_gold,המחיר: %s זהב (3 אחוזים מהונך).,The 
 capacity_offer_cost_goods,המחיר: 3 אחוזים מהסחורה במחסן הספינה (שווים יותר מ-3 אחוזים מהזהב שלך).,The price: 3 percent of the cargo in your hold (worth more than 3 percent of your gold).
 capacity_offer_accept,קבל את ההצעה,Accept the Offer
 capacity_offer_decline,סרב,Decline
+millionaire_gift_message,הגעתם למיליון זהב! כמתנה חגיגית, מחסן הספינה שלכם גדל ב-%s יחידות קיבולת -- ללא תנאים.,You've reached one million gold! As a congratulatory gift, your ship's hold has grown by %s capacity units -- no strings attached.
 pirates_title,פיראטים!,Pirates!
 pirates_desc,ספינת פיראטים מתקרבת. מה תעשה?,A pirate ship approaches. What will you do?
 pirates_fight,הילחם,Fight
