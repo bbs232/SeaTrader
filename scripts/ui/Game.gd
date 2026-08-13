@@ -35,6 +35,7 @@ func _ready() -> void:
 	GameState.game_ended.connect(_on_game_ended)
 	GameState.capacity_offer_available.connect(_on_capacity_offer_available)
 	GameState.millionaire_gift_granted.connect(_on_millionaire_gift_granted)
+	GameState.mega_capacity_gift_granted.connect(_on_mega_capacity_gift_granted)
 	_build_ui()
 
 func _build_ui() -> void:
@@ -142,10 +143,10 @@ func _build_dock() -> void:
 func _refresh_all() -> void:
 	var port := GameState.get_port(GameState.current_port_id)
 	var port_name := tr(port.name_key) if port else "?"
-	hud_label.text = "%s %d/%d (%s)   |   %s: %s   |   %s: %d/%d   |   %s: %s   |   %s" % [
+	hud_label.text = "%s %d/%d (%s)   |   %s: %s   |   %s: %s/%s   |   %s: %s   |   %s" % [
 		tr("hud_day"), GameState.current_day, GameState.game_length_days, tr(_time_of_day_key()),
 		tr("hud_gold"), UIUtil.format_gold(GameState.gold),
-		tr("hud_cargo"), GameState.get_cargo_used(), GameState.ship_capacity,
+		tr("hud_cargo"), UIUtil.format_gold(GameState.get_cargo_used()), UIUtil.format_gold(GameState.ship_capacity),
 		tr("hud_networth"), UIUtil.format_gold(GameState.get_net_worth()),
 		port_name,
 	]
@@ -388,12 +389,12 @@ func _show_confirm(text: String, on_confirm: Callable) -> void:
 	vbox.add_child(btn_cancel)
 
 ## Stacks a small numeric-entry dialog on top of the current overlay, used by
-## the trade panel's quantity button instead of a raw SpinBox -- a SpinBox's
-## internal LineEdit only commits typed text on blur/Enter, which a fast tap
-## straight to Buy/Sell can race and silently ignore. This dialog only ever
-## reports a value back via on_set when the player explicitly confirms, so
-## there's no ambiguous partially-typed state to race against.
-func _open_quantity_dialog(current: int, on_set: Callable) -> void:
+## the trade panel's quantity/gold-amount buttons instead of a raw SpinBox --
+## a SpinBox's internal LineEdit only commits typed text on blur/Enter, which
+## a fast tap straight to Buy/Sell can race and silently ignore. This dialog
+## only ever reports a value back via on_set when the player explicitly
+## confirms, so there's no ambiguous partially-typed state to race against.
+func _open_quantity_dialog(current: int, on_set: Callable, title_key: String = "quantity_dialog_title", min_value: int = 1) -> void:
 	if overlay_stack.is_empty():
 		return
 	var layer: CanvasLayer = overlay_stack.back()
@@ -415,19 +416,22 @@ func _open_quantity_dialog(current: int, on_set: Callable) -> void:
 	vbox.add_theme_constant_override("separation", 12)
 	panel.add_child(vbox)
 
-	vbox.add_child(UIUtil.make_title(tr("quantity_dialog_title"), 20))
+	vbox.add_child(UIUtil.make_title(tr(title_key), 20))
 
 	var edit := LineEdit.new()
-	edit.text = str(current)
+	edit.text = UIUtil.format_gold(current)
 	edit.custom_minimum_size = Vector2(0, 48)
 	edit.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
 	edit.select_all_on_focus = true
 	vbox.add_child(edit)
 
 	var apply := func():
-		var qty := int(edit.text.strip_edges())
-		if qty < 1:
-			qty = 1
+		# Strips thousands-separator commas (the field is pre-filled with them
+		# via UIUtil.format_gold) before parsing -- int() would otherwise stop
+		# at the first comma and silently truncate the value.
+		var qty := int(edit.text.strip_edges().replace(",", ""))
+		if qty < min_value:
+			qty = min_value
 		dim.queue_free()
 		on_set.call(qty)
 
@@ -450,10 +454,25 @@ func _confirm_and_buy(good: Good, qty: int, on_bought: Callable) -> void:
 	if qty <= 0:
 		return
 	var cost := GameState.get_price(GameState.current_port_id, good.id) * qty
-	var msg := tr("confirm_buy_max") % [qty, tr(good.name_key), UIUtil.format_gold(cost)]
+	var msg := tr("confirm_buy_max") % [UIUtil.format_gold(qty), tr(good.name_key), UIUtil.format_gold(cost)]
+	_show_buy_confirm(good, qty, msg, on_bought)
+
+## Like _confirm_and_buy, but for the "buy by gold amount" flow: qty was
+## derived by rounding a player-entered gold budget down to a whole number
+## of units, so the confirmation spells out both the resulting quantity/cost
+## and the original amount it was rounded from.
+func _confirm_and_buy_by_gold(good: Good, qty: int, entered_gold: int, on_bought: Callable) -> void:
+	if qty <= 0:
+		return
+	var cost := GameState.get_price(GameState.current_port_id, good.id) * qty
+	var msg := tr("confirm_buy_by_gold") % [UIUtil.format_gold(qty), tr(good.name_key), UIUtil.format_gold(cost), UIUtil.format_gold(entered_gold)]
+	_show_buy_confirm(good, qty, msg, on_bought)
+
+func _show_buy_confirm(good: Good, qty: int, msg: String, on_bought: Callable) -> void:
+	var full_msg := msg
 	if GameState.get_cargo_used() + qty > GameState.ship_capacity:
-		msg += "\n" + tr("confirm_overload_warning")
-	_show_confirm(msg, func():
+		full_msg += "\n" + tr("confirm_overload_warning")
+	_show_confirm(full_msg, func():
 		if GameState.buy(good.id, qty):
 			on_bought.call()
 	)
@@ -492,7 +511,7 @@ func _open_travel_confirm(port_id: String) -> void:
 func _open_trade_panel() -> void:
 	var panel := _open_overlay()
 	var vbox := VBoxContainer.new()
-	vbox.custom_minimum_size = Vector2(830, 0)
+	vbox.custom_minimum_size = Vector2(910, 0)
 	vbox.add_theme_constant_override("separation", 10)
 	panel.add_child(vbox)
 
@@ -504,8 +523,8 @@ func _open_trade_panel() -> void:
 	vbox.add_child(overload_label)
 
 	var refresh_status := func():
-		status_label.text = "%s: %s   |   %s: %d/%d" % [
-			tr("hud_gold"), UIUtil.format_gold(GameState.gold), tr("hud_cargo"), GameState.get_cargo_used(), GameState.ship_capacity]
+		status_label.text = "%s: %s   |   %s: %s/%s" % [
+			tr("hud_gold"), UIUtil.format_gold(GameState.gold), tr("hud_cargo"), UIUtil.format_gold(GameState.get_cargo_used()), UIUtil.format_gold(GameState.ship_capacity)]
 		overload_label.text = tr("trade_overload_warning") if GameState.is_overloaded() else ""
 
 	refresh_status.call()
@@ -542,7 +561,7 @@ func _open_trade_panel() -> void:
 		# GDScript lambda capture semantics -- an Array is captured by
 		# reference, a plain local int would not reliably be.
 		var qty_box: Array = [1]
-		var btn_amount := UIUtil.make_button(str(qty_box[0]), 44, 16)
+		var btn_amount := UIUtil.make_button(UIUtil.format_gold(qty_box[0]), 44, 16)
 		btn_amount.custom_minimum_size = Vector2(80, 44)
 		row.add_child(btn_amount)
 
@@ -558,6 +577,10 @@ func _open_trade_panel() -> void:
 		btn_buy_max_capacity.custom_minimum_size = Vector2(60, 44)
 		row.add_child(btn_buy_max_capacity)
 
+		var btn_buy_by_gold := UIUtil.make_button(tr("trade_buy_by_gold"), 44, 16)
+		btn_buy_by_gold.custom_minimum_size = Vector2(70, 44)
+		row.add_child(btn_buy_by_gold)
+
 		var btn_sell := UIUtil.make_button(tr("trade_sell"), 44, 16)
 		btn_sell.custom_minimum_size = Vector2(70, 44)
 		row.add_child(btn_sell)
@@ -570,11 +593,12 @@ func _open_trade_panel() -> void:
 			var price := GameState.get_price(GameState.current_port_id, good.id)
 			price_label.text = "%s: %s" % [tr("trade_price"), UIUtil.format_gold(price)]
 			var owned: int = GameState.cargo.get(good.id, 0)
-			owned_label.text = "%s: %d" % [tr("trade_owned"), owned]
+			owned_label.text = "%s: %s" % [tr("trade_owned"), UIUtil.format_gold(owned)]
 			var max_buy := GameState.get_max_affordable(good.id)
 			btn_buy.disabled = max_buy <= 0
 			btn_buy_max.disabled = max_buy <= 0
 			btn_buy_max_capacity.disabled = GameState.get_max_sailable_affordable(good.id) <= 0
+			btn_buy_by_gold.disabled = max_buy <= 0
 			btn_sell.disabled = owned <= 0
 			btn_sell_all.disabled = owned <= 0
 
@@ -584,7 +608,7 @@ func _open_trade_panel() -> void:
 		btn_amount.pressed.connect(func():
 			_open_quantity_dialog(qty_box[0], func(new_qty: int):
 				qty_box[0] = new_qty
-				btn_amount.text = str(new_qty)
+				btn_amount.text = UIUtil.format_gold(new_qty)
 			)
 		)
 		btn_buy.pressed.connect(func():
@@ -597,7 +621,7 @@ func _open_trade_panel() -> void:
 			var max_buy := GameState.get_max_affordable(good.id)
 			_confirm_and_buy(good, max_buy, func():
 				qty_box[0] = max_buy
-				btn_amount.text = str(max_buy)
+				btn_amount.text = UIUtil.format_gold(max_buy)
 				refresh_all_rows.call()
 				refresh_status.call()
 			)
@@ -606,10 +630,32 @@ func _open_trade_panel() -> void:
 			var max_buy := GameState.get_max_sailable_affordable(good.id)
 			_confirm_and_buy(good, max_buy, func():
 				qty_box[0] = max_buy
-				btn_amount.text = str(max_buy)
+				btn_amount.text = UIUtil.format_gold(max_buy)
 				refresh_all_rows.call()
 				refresh_status.call()
 			)
+		)
+		btn_buy_by_gold.pressed.connect(func():
+			var price := GameState.get_price(GameState.current_port_id, good.id)
+			if price <= 0:
+				return
+			_open_quantity_dialog(price, func(entered_gold: int):
+				# Rounds down to a whole number of units, and clamps the
+				# spend to the gold actually on hand -- an entered amount
+				# above current gold would otherwise produce a qty the
+				# player can't actually afford.
+				var spendable: int = min(entered_gold, GameState.gold)
+				var qty := int(spendable / float(price))
+				if qty <= 0:
+					_show_message(tr("trade_gold_too_low"))
+					return
+				_confirm_and_buy_by_gold(good, qty, entered_gold, func():
+					qty_box[0] = qty
+					btn_amount.text = UIUtil.format_gold(qty)
+					refresh_all_rows.call()
+					refresh_status.call()
+				)
+			, "gold_dialog_title", 1)
 		)
 		btn_sell.pressed.connect(func():
 			if GameState.sell(good.id, qty_box[0]):
@@ -621,7 +667,7 @@ func _open_trade_panel() -> void:
 			if owned <= 0:
 				return
 			var revenue := GameState.get_price(GameState.current_port_id, good.id) * owned
-			_show_confirm(tr("confirm_sell_all") % [owned, tr(good.name_key), UIUtil.format_gold(revenue)], func():
+			_show_confirm(tr("confirm_sell_all") % [UIUtil.format_gold(owned), tr(good.name_key), UIUtil.format_gold(revenue)], func():
 				if GameState.sell(good.id, owned):
 					qty_box[0] = 1
 					btn_amount.text = "1"
@@ -773,24 +819,24 @@ func _open_shipyard_panel() -> void:
 		status_label.custom_minimum_size = Vector2(90, 0)
 		row.add_child(status_label)
 
-		var btn_buy := UIUtil.make_button(tr("shipyard_buy") % up.cost, 44, 16)
+		var btn_buy := UIUtil.make_button(tr("shipyard_buy") % UIUtil.format_gold(up.cost), 44, 16)
 		row.add_child(btn_buy)
 
 		var refresh_row := func():
 			if GameState.is_upgrade_owned(up.id):
 				status_label.text = tr("shipyard_owned")
-				amount_label.text = tr("shipyard_amount_plain") % up.amount
+				amount_label.text = tr("shipyard_amount_plain") % UIUtil.format_gold(up.amount)
 				btn_buy.disabled = true
 			elif up.requires_id != "" and not GameState.is_upgrade_owned(up.requires_id):
 				status_label.text = tr("shipyard_locked")
-				amount_label.text = tr("shipyard_amount_plain") % up.amount
+				amount_label.text = tr("shipyard_amount_plain") % UIUtil.format_gold(up.amount)
 				btn_buy.disabled = true
 			else:
 				status_label.text = ""
 				if up.kind == ShipUpgrade.Kind.CARGO:
-					amount_label.text = tr("shipyard_amount_cargo") % [up.amount, GameState.ship_capacity + up.amount]
+					amount_label.text = tr("shipyard_amount_cargo") % [UIUtil.format_gold(up.amount), UIUtil.format_gold(GameState.ship_capacity + up.amount)]
 				else:
-					amount_label.text = tr("shipyard_amount_plain") % up.amount
+					amount_label.text = tr("shipyard_amount_plain") % UIUtil.format_gold(up.amount)
 				btn_buy.disabled = not GameState.can_buy_upgrade(up.id)
 
 		refresh_row.call()
@@ -820,7 +866,7 @@ func _open_shipyard_panel() -> void:
 
 	var refresh_sec := func():
 		sec_status.text = tr("shipyard_security_owned") % GameState.security_ships
-		btn_hire.text = tr("shipyard_hire") % GameState.get_security_ship_cost()
+		btn_hire.text = tr("shipyard_hire") % UIUtil.format_gold(GameState.get_security_ship_cost())
 		btn_hire.disabled = not GameState.can_hire_security_ship()
 
 	refresh_sec.call()
@@ -868,7 +914,7 @@ func _open_market_panel() -> void:
 		grid.add_child(name_label)
 		for port in GameState.ports:
 			var is_here := port.id == GameState.current_port_id
-			var price_label := UIUtil.make_label(str(GameState.get_price(port.id, good.id)), 15,
+			var price_label := UIUtil.make_label(UIUtil.format_gold(GameState.get_price(port.id, good.id)), 15,
 				Color("#D9A441") if is_here else Color("#FFF6E3"))
 			price_label.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
 			grid.add_child(price_label)
@@ -1036,6 +1082,9 @@ func _on_capacity_offer_available() -> void:
 func _on_millionaire_gift_granted() -> void:
 	_show_message(tr("millionaire_gift_message") % UIUtil.format_gold(GameState.MILLIONAIRE_GIFT_CAPACITY_BONUS))
 
+func _on_mega_capacity_gift_granted() -> void:
+	_show_message(tr("mega_capacity_gift_message") % UIUtil.format_gold(GameState.MEGA_CAPACITY_GIFT_CAPACITY_BONUS))
+
 ## --- Arrival / travel report ---
 
 func _on_arrived_at_port(port_id: String, log: Array) -> void:
@@ -1094,7 +1143,7 @@ func _format_goods_list(lost: Dictionary) -> String:
 	var parts: Array = []
 	for good_id in lost.keys():
 		var good := GameState.get_good(good_id)
-		parts.append("%d %s" % [lost[good_id], tr(good.name_key) if good else good_id])
+		parts.append("%s %s" % [UIUtil.format_gold(lost[good_id]), tr(good.name_key) if good else good_id])
 	return ", ".join(parts)
 
 func _show_message(text: String) -> void:

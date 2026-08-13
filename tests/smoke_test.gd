@@ -324,6 +324,49 @@ func _initialize() -> void:
 	SaveManager.delete_save()
 	print("millionaire warehouse gift OK")
 
+	# Mega warehouse gift: on top of (not instead of) the recurring
+	# CAPACITY_OFFER_GOLD_STEP paid offer and the one-time millionaire gift
+	# above, every MEGA_CAPACITY_GIFT_GOLD_STEP of gold ever reached grants
+	# another free capacity bonus -- and keeps recurring, unlike the
+	# millionaire gift's one-shot flag.
+	GameState.new_game(21, "jaffa")
+	var mega_fired := [0] # boxed in an Array -- lambdas capture locals by value, not by reference
+	var offer_fired2 := [0]
+	GameState.mega_capacity_gift_granted.connect(func(): mega_fired[0] += 1)
+	GameState.capacity_offer_available.connect(func(): offer_fired2[0] += 1)
+	GameState.gold = GameState.MEGA_CAPACITY_GIFT_GOLD_STEP - 1 # 99,999,999 -- also crosses several 10M-offer milestones on the way up
+	assert(mega_fired[0] == 0)
+	offer_fired2[0] = 0 # only care about what fires on the crossing below, not the milestones passed getting here
+	var mega_cap_before: int = GameState.ship_capacity
+	GameState.gold = GameState.MEGA_CAPACITY_GIFT_GOLD_STEP # crosses 100M -- the mega gift and the regular 10M-offer milestone both fire, independently
+	assert(mega_fired[0] == 1)
+	assert(offer_fired2[0] == 1)
+	assert(GameState.ship_capacity == mega_cap_before + GameState.MEGA_CAPACITY_GIFT_CAPACITY_BONUS)
+	GameState.gold += 500 # still above the same threshold -- must not refire
+	assert(mega_fired[0] == 1)
+	GameState.gold = GameState.MEGA_CAPACITY_GIFT_GOLD_STEP * 2 # next step -- recurs, unlike the millionaire gift
+	assert(mega_fired[0] == 2)
+	assert(GameState.ship_capacity == mega_cap_before + GameState.MEGA_CAPACITY_GIFT_CAPACITY_BONUS * 2)
+
+	# A single jump spanning multiple steps grants one gift per step crossed,
+	# not just one for the whole jump.
+	GameState.new_game(21, "jaffa")
+	GameState.gold = GameState.MILLIONAIRE_GIFT_GOLD_THRESHOLD # resolve the one-time millionaire gift first so it doesn't interfere with the delta assertion below
+	var mega_fired2 := [0]
+	GameState.mega_capacity_gift_granted.connect(func(): mega_fired2[0] += 1)
+	var mega_cap_before2: int = GameState.ship_capacity
+	GameState.gold = GameState.MEGA_CAPACITY_GIFT_GOLD_STEP * 3
+	assert(mega_fired2[0] == 3)
+	assert(GameState.ship_capacity == mega_cap_before2 + GameState.MEGA_CAPACITY_GIFT_CAPACITY_BONUS * 3)
+
+	# Milestone persists across save/load, same as capacity_offer_milestone.
+	SaveManager.save_game()
+	GameState.mega_capacity_gift_milestone = 0
+	assert(SaveManager.load_game())
+	assert(GameState.mega_capacity_gift_milestone == 3)
+	SaveManager.delete_save()
+	print("mega capacity gift OK")
+
 	# Save/Load round trip
 	SaveManager.save_game()
 	assert(SaveManager.has_save())

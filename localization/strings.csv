@@ -44,11 +44,15 @@ trade_buy,קנה,Buy
 trade_sell,מכור,Sell
 trade_max,מקס׳ זהב,Max Gold
 trade_max_capacity,מקס׳ קיבולת,Max Cap.
+trade_buy_by_gold,לפי כסף,By Gold
 quantity_dialog_title,הזן כמות,Enter Quantity
+gold_dialog_title,הזן סכום זהב,Enter Gold Amount
 trade_all,הכל,All
 confirm,אשר,Confirm
-confirm_buy_max,לקנות %d %s תמורת %s זהב?,Buy %d %s for %s gold?
-confirm_sell_all,למכור %d %s תמורת %s זהב?,Sell %d %s for %s gold?
+confirm_buy_max,לקנות %s %s תמורת %s זהב?,Buy %s %s for %s gold?
+confirm_buy_by_gold,לקנות %s %s תמורת %s זהב (הכי קרוב ל-%s זהב שהזנת)?,Buy %s %s for %s gold (closest to the %s gold you entered)?
+trade_gold_too_low,הסכום שהזנת לא מספיק לקניית ולו יחידה אחת,The amount you entered isn't enough to buy even one unit.
+confirm_sell_all,למכור %s %s תמורת %s זהב?,Sell %s %s for %s gold?
 confirm_overload_warning,⚠ הספינה תיטען מעבר לקיבולת הרגילה — סיכון לאובדן מטען או נזק לספינה בדרך,⚠ The ship will be loaded beyond nominal capacity — risk of losing cargo or ship damage en route
 trade_price,מחיר,Price
 trade_owned,ברשותך,Owned
@@ -80,6 +84,7 @@ capacity_offer_cost_goods,המחיר: 3 אחוזים מהסחורה במחסן �
 capacity_offer_accept,קבל את ההצעה,Accept the Offer
 capacity_offer_decline,סרב,Decline
 millionaire_gift_message,הגעתם למיליון זהב! כמתנה חגיגית מחסן הספינה שלכם גדל ב-%s יחידות קיבולת -- ללא תנאים.,You've reached one million gold! As a congratulatory gift your ship's hold has grown by %s capacity units -- no strings attached.
+mega_capacity_gift_message,עוד 100 מיליון זהב! מחסן הספינה שלכם גדל ב-%s יחידות קיבולת נוספות -- ללא תנאים.,Another 100 million gold! Your ship's hold has grown by another %s capacity units -- no strings attached.
 pirates_title,פיראטים!,Pirates!
 pirates_desc,ספינת פיראטים מתקרבת. מה תעשה?,A pirate ship approaches. What will you do?
 pirates_fight,הילחם,Fight
@@ -140,7 +145,7 @@ shipyard_security_ships,ספינות אבטחה,Security Ships
 shipyard_security_hint,כל ספינת אבטחה מוסיפה 15% לסיכוי הניצחון בקרב מול פיראטים.,Each security ship adds 15% to your win chance when fighting pirates.
 shipyard_security_owned,%d בשירות,%d hired
 shipyard_hire,גייס (%s),Hire (%s)
-shipyard_amount_plain,+%d,+%d
-shipyard_amount_cargo,+%d (יהיה %d),+%d (will be %d)
+shipyard_amount_plain,+%s,+%s
+shipyard_amount_cargo,+%s (יהיה %s),+%s (will be %s)
 rest_notable_price_drop,בוקר חדש! מחירי ה%s צנחו ב%s.,A new morning! %s prices have crashed in %s.
 rest_notable_price_rise,בוקר חדש! מחירי ה%s זינקו ב%s.,A new morning! %s prices have spiked in %s.

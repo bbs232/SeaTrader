@@ -25,6 +25,7 @@ func save_game() -> void:
 		"prices": GameState.prices,
 		"capacity_offer_milestone": GameState.capacity_offer_milestone,
 		"millionaire_gift_claimed": GameState.millionaire_gift_claimed,
+		"mega_capacity_gift_milestone": GameState.mega_capacity_gift_milestone,
 	}
 	var file := FileAccess.open(SAVE_PATH, FileAccess.WRITE)
 	if file:
@@ -62,6 +63,7 @@ func load_game() -> bool:
 	GameState.savings = parsed.get("savings", 0.0)
 	GameState.prices = parsed.get("prices", {})
 	GameState.capacity_offer_milestone = parsed.get("capacity_offer_milestone", 0)
+	GameState.mega_capacity_gift_milestone = parsed.get("mega_capacity_gift_milestone", 0)
 	GameState.is_traveling = false
 	GameState.pending_encounter.clear()
 	return true
