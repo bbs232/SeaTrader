@@ -7,10 +7,11 @@ signal pirate_encounter_started(details: Dictionary)
 signal game_ended(summary: Dictionary)
 signal capacity_offer_available()
 signal millionaire_gift_granted()
-signal mega_capacity_gift_granted()
+signal mega_capacity_gift_granted(bonus: int)
+signal billionaire_gift_granted(security_ships_granted: int)
 
 ## Bumped by one on every gameplay/UI update shipped, shown in the main menu footer.
-const GAME_VERSION := "3.3"
+const GAME_VERSION := "3.5"
 
 const STARTING_GOLD := 500
 const STARTING_CAPACITY := 85
@@ -48,6 +49,8 @@ const MILLIONAIRE_GIFT_GOLD_THRESHOLD := 1_000_000 # one-time free warehouse gif
 const MILLIONAIRE_GIFT_CAPACITY_BONUS := 100_000 # flat cargo-hold increase granted unconditionally, no cost
 const MEGA_CAPACITY_GIFT_GOLD_STEP := 100_000_000 # each new multiple of gold reached grants another free warehouse gift, stacking alongside (not replacing) the CAPACITY_OFFER_GOLD_STEP paid offers
 const MEGA_CAPACITY_GIFT_CAPACITY_BONUS := 10_000_000 # flat cargo-hold increase granted unconditionally, no cost, per MEGA_CAPACITY_GIFT_GOLD_STEP reached
+const BILLIONAIRE_GIFT_GOLD_THRESHOLD := 1_000_000_000 # one-time free security-ship gift once gold ever reaches this -- same one-shot pattern as MILLIONAIRE_GIFT_GOLD_THRESHOLD, just a much bigger milestone
+const BILLIONAIRE_GIFT_SECURITY_SHIPS := 3 # flat escort-ship count granted unconditionally, no cost, on top of however many the player already has
 
 var goods: Array[Good] = []
 var ports: Array[Port] = []
@@ -62,6 +65,7 @@ var gold: int = STARTING_GOLD:
 		_check_millionaire_gift()
 		_check_capacity_offer()
 		_check_mega_capacity_gift()
+		_check_billionaire_gift()
 var current_port_id: String = ""
 var cargo: Dictionary = {} # good_id -> int quantity
 var ship_capacity: int = STARTING_CAPACITY
@@ -87,6 +91,10 @@ var millionaire_gift_claimed: bool = false
 ## _check_mega_capacity_gift) -- recurring like capacity_offer_milestone,
 ## not a one-time flag like millionaire_gift_claimed.
 var mega_capacity_gift_milestone: int = 0
+## Whether the one-time BILLIONAIRE_GIFT_GOLD_THRESHOLD security-ship gift has
+## already been granted (see _check_billionaire_gift), so it only fires once --
+## same one-shot pattern as millionaire_gift_claimed.
+var billionaire_gift_claimed: bool = false
 
 var prices: Dictionary = {} # port_id -> { good_id -> int price }
 
@@ -206,6 +214,7 @@ func new_game(game_length: int = 21, start_port_id: String = "jaffa") -> void:
 	capacity_offer_milestone = 0
 	millionaire_gift_claimed = false
 	mega_capacity_gift_milestone = 0
+	billionaire_gift_claimed = false
 	is_traveling = false
 	travel_destination_id = ""
 	travel_half_days_remaining = 0
@@ -297,6 +306,14 @@ func get_max_sailable_affordable(good_id: String) -> int:
 	var by_gold := get_max_affordable(good_id)
 	var by_sail_capacity: int = max(0, get_overload_capacity() - get_cargo_used())
 	return min(by_gold, by_sail_capacity)
+
+## Like get_max_sailable_affordable, but capped at nominal ship_capacity
+## instead of the 150% overload allowance -- for the "legal" (no risk of
+## overload mishaps) half of the max-capacity buy choice.
+func get_max_legal_capacity_affordable(good_id: String) -> int:
+	var by_gold := get_max_affordable(good_id)
+	var by_legal_capacity: int = max(0, ship_capacity - get_cargo_used())
+	return min(by_gold, by_legal_capacity)
 
 func can_buy(good_id: String, qty: int) -> bool:
 	if qty <= 0:
@@ -619,15 +636,29 @@ func _check_millionaire_gift() -> void:
 ## _check_capacity_offer, but unconditional/free like _check_millionaire_gift,
 ## and fires independently alongside both (this is a bigger, repeatable bonus
 ## layered on top, not a replacement for the smaller paid offer every 10M).
-## Loops rather than jumping straight to the new milestone, so a single gold
-## jump spanning several steps (e.g. a huge sale) still grants one gift per
-## step crossed instead of silently dropping the skipped-over ones.
+## A single gold jump spanning several steps (e.g. a huge sale) still counts
+## every step crossed instead of silently dropping the skipped-over ones, but
+## -- same reasoning as _check_capacity_offer -- grants the whole bundled
+## bonus at once and fires ONE message, not one popup per step.
 func _check_mega_capacity_gift() -> void:
 	var milestone := int(gold) / MEGA_CAPACITY_GIFT_GOLD_STEP
-	while milestone > mega_capacity_gift_milestone:
-		mega_capacity_gift_milestone += 1
-		ship_capacity += MEGA_CAPACITY_GIFT_CAPACITY_BONUS
-		mega_capacity_gift_granted.emit()
+	if milestone > mega_capacity_gift_milestone:
+		var steps := milestone - mega_capacity_gift_milestone
+		mega_capacity_gift_milestone = milestone
+		var bonus := MEGA_CAPACITY_GIFT_CAPACITY_BONUS * steps
+		ship_capacity += bonus
+		mega_capacity_gift_granted.emit(bonus)
+
+## The first time gold ever reaches BILLIONAIRE_GIFT_GOLD_THRESHOLD, the
+## player is granted BILLIONAIRE_GIFT_SECURITY_SHIPS free escort ships on top
+## of however many they already have -- a one-time congratulatory gift, same
+## one-shot pattern as _check_millionaire_gift, just a much bigger milestone.
+func _check_billionaire_gift() -> void:
+	if billionaire_gift_claimed or gold < BILLIONAIRE_GIFT_GOLD_THRESHOLD:
+		return
+	billionaire_gift_claimed = true
+	security_ships += BILLIONAIRE_GIFT_SECURITY_SHIPS
+	billionaire_gift_granted.emit(BILLIONAIRE_GIFT_SECURITY_SHIPS)
 
 func _roll_travel_event() -> void:
 	var from_port := get_port(current_port_id)

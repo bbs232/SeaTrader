@@ -9,6 +9,16 @@ const SHIP_ICON_SIZE := Vector2(90, 90)
 ## unambiguously level with its port.
 const SHIP_PORT_OFFSET := Vector2(-70, 0)
 
+## Port/ship map coordinates (Port.map_position, and everything derived from
+## it below) are authored as absolute pixels against this canvas size, which
+## matches project.godot's window/size/viewport_width|height. Under
+## window/stretch/aspect="expand" the *logical* canvas can actually be bigger
+## than this on non-16:9 screens (that's how it fills the screen instead of
+## letterboxing) -- see _map_scale(), which rescales the authored coordinates
+## to whatever the canvas actually is so markers/ship stay aligned with the
+## map background (which stretches to fill the same way).
+const MAP_DESIGN_SIZE := Vector2(1280, 720)
+
 var map_layer: Control
 var hud_layer: Control
 ## A real stack, not a single slot: GameState can resolve a whole voyage
@@ -18,6 +28,7 @@ var hud_layer: Control
 var overlay_stack: Array[CanvasLayer] = []
 
 var port_buttons: Dictionary = {} # port_id -> TextureButton
+var port_labels: Dictionary = {} # port_id -> Label
 var ship_icon: TextureRect
 var hud_label: Label
 var dock_panel: PanelContainer
@@ -36,6 +47,7 @@ func _ready() -> void:
 	GameState.capacity_offer_available.connect(_on_capacity_offer_available)
 	GameState.millionaire_gift_granted.connect(_on_millionaire_gift_granted)
 	GameState.mega_capacity_gift_granted.connect(_on_mega_capacity_gift_granted)
+	GameState.billionaire_gift_granted.connect(_on_billionaire_gift_granted)
 	_build_ui()
 
 func _build_ui() -> void:
@@ -59,6 +71,17 @@ func _build_ui() -> void:
 	_build_dock()
 	_refresh_all()
 
+## Ratio between the actual current canvas size and MAP_DESIGN_SIZE -- 1:1
+## on a 16:9 screen, >1 on one axis wherever "expand" widened/heightened the
+## canvas past the design size to fill a different-aspect screen.
+func _map_scale() -> Vector2:
+	return size / MAP_DESIGN_SIZE
+
+## Rescales a Port.map_position (or any other MAP_DESIGN_SIZE-authored point,
+## e.g. the ship's target while gliding between ports) to the actual canvas.
+func _map_marker_position(design_pos: Vector2) -> Vector2:
+	return design_pos * _map_scale()
+
 func _build_map() -> void:
 	# NOTE: position/size must be assigned AFTER add_child(). Godot resolves
 	# RTL anchor-mirroring against the parent's width at the moment position/
@@ -72,22 +95,41 @@ func _build_map() -> void:
 		btn.pressed.connect(_on_port_marker_pressed.bind(port.id))
 		map_layer.add_child(btn)
 		btn.size = Vector2(40, 40)
-		btn.position = port.map_position - Vector2(20, 20)
 
 		var label := UIUtil.make_label(tr(port.name_key), 16)
 		label.layout_direction = Control.LAYOUT_DIRECTION_LTR
 		label.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
 		map_layer.add_child(label)
-		label.position = port.map_position + Vector2(-40, 20)
 		label.size = Vector2(100, 24)
 
 		port_buttons[port.id] = btn
+		port_labels[port.id] = label
 
 	ship_icon = TextureRect.new()
 	ship_icon.texture = load("res://assets/art/ship.svg")
 	ship_icon.mouse_filter = Control.MOUSE_FILTER_IGNORE
 	map_layer.add_child(ship_icon)
 	ship_icon.size = SHIP_ICON_SIZE
+
+	_reposition_map()
+	# The logical canvas can change size after this (browser window resize,
+	# device rotation) since "expand" ties it to the actual screen aspect --
+	# reposition markers/ship to match instead of leaving them at their
+	# build-time spot.
+	resized.connect(_reposition_map)
+
+## Re-applies _map_scale() to every port marker/label and the ship, so they
+## stay aligned with the (equally rescaled) map background. Called once at
+## build time and again on every resize.
+func _reposition_map() -> void:
+	for port in GameState.ports:
+		var btn: TextureButton = port_buttons[port.id]
+		btn.position = _map_marker_position(port.map_position) - Vector2(20, 20)
+		var label: Label = port_labels[port.id]
+		label.position = _map_marker_position(port.map_position) + Vector2(-40, 20)
+	var current_port := GameState.get_port(GameState.current_port_id)
+	if current_port and not is_animating_travel:
+		ship_icon.position = _map_marker_position(current_port.map_position) + SHIP_PORT_OFFSET - SHIP_ICON_SIZE / 2
 
 func _build_hud() -> void:
 	var bg := UIUtil.make_panel()
@@ -107,7 +149,12 @@ func _build_hud() -> void:
 	menu_btn.pressed.connect(_on_menu_pressed)
 	hud_layer.add_child(menu_btn)
 	menu_btn.size = Vector2(140, 40)
-	menu_btn.position = Vector2(1130, 8)
+	# Anchored to the physical top-right corner (not a fixed x position) so it
+	# stays pinned there regardless of the canvas's actual width -- under
+	# window/stretch/aspect="expand" that width can exceed MAP_DESIGN_SIZE.x
+	# on non-16:9 screens.
+	menu_btn.set_anchors_preset(Control.PRESET_TOP_RIGHT)
+	menu_btn.position = Vector2(-150, 8)
 
 func _build_dock() -> void:
 	dock_panel = UIUtil.make_panel()
@@ -152,7 +199,7 @@ func _refresh_all() -> void:
 	]
 	map_bg.modulate = _time_of_day_tint()
 	if port and not is_animating_travel:
-		ship_icon.position = port.map_position + SHIP_PORT_OFFSET - SHIP_ICON_SIZE / 2
+		ship_icon.position = _map_marker_position(port.map_position) + SHIP_PORT_OFFSET - SHIP_ICON_SIZE / 2
 	dock_panel.visible = not GameState.is_traveling and not is_animating_travel and not is_resting
 	_update_port_marker_states()
 
@@ -285,7 +332,7 @@ func _format_notable_price_change(details: Dictionary) -> String:
 ## no matter how many encounters happened along the route.
 
 func _animate_ship_to(map_pos: Vector2, fraction: float = 1.0) -> void:
-	var target := map_pos + SHIP_PORT_OFFSET - SHIP_ICON_SIZE / 2
+	var target := _map_marker_position(map_pos) + SHIP_PORT_OFFSET - SHIP_ICON_SIZE / 2
 	var start: Vector2 = ship_icon.position
 	var leg_target: Vector2 = start.lerp(target, fraction)
 	var duration: float = clamp(start.distance_to(leg_target) / 220.0, 0.4, 2.2)
@@ -387,6 +434,58 @@ func _show_confirm(text: String, on_confirm: Callable) -> void:
 	var btn_cancel := UIUtil.make_button(tr("cancel"))
 	btn_cancel.pressed.connect(func(): dim.queue_free())
 	vbox.add_child(btn_cancel)
+
+## Stacks a choice between the two "max capacity" purchase sizes on top of
+## the trade panel: strictly within nominal ship_capacity (no overload risk)
+## or up to the 150% overload allowance (see OVERLOAD_ALLOWANCE). Reports the
+## chosen quantity via on_choice, which the caller then runs through the
+## normal _confirm_and_buy flow (cost + overload warning) same as any other
+## buy button -- this dialog only decides how much, not whether.
+func _open_capacity_choice(good: Good, on_choice: Callable) -> void:
+	if overlay_stack.is_empty():
+		return
+	var layer: CanvasLayer = overlay_stack.back()
+
+	var dim := ColorRect.new()
+	dim.color = Color(0, 0, 0, 0.55)
+	dim.set_anchors_preset(Control.PRESET_FULL_RECT)
+	layer.add_child(dim)
+
+	var center := CenterContainer.new()
+	center.set_anchors_preset(Control.PRESET_FULL_RECT)
+	dim.add_child(center)
+
+	var panel := UIUtil.make_panel()
+	center.add_child(panel)
+
+	var vbox := VBoxContainer.new()
+	vbox.custom_minimum_size = Vector2(380, 0)
+	vbox.add_theme_constant_override("separation", 12)
+	panel.add_child(vbox)
+
+	vbox.add_child(UIUtil.make_title(tr("capacity_choice_title"), 20))
+
+	var legal_max := GameState.get_max_legal_capacity_affordable(good.id)
+	var btn_legal := UIUtil.make_button(tr("capacity_choice_legal") % UIUtil.format_gold(legal_max))
+	btn_legal.disabled = legal_max <= 0
+	btn_legal.pressed.connect(func():
+		dim.queue_free()
+		on_choice.call(legal_max)
+	)
+	vbox.add_child(btn_legal)
+
+	var overload_max := GameState.get_max_sailable_affordable(good.id)
+	var btn_overload := UIUtil.make_button(tr("capacity_choice_overload") % UIUtil.format_gold(overload_max))
+	btn_overload.disabled = overload_max <= 0
+	btn_overload.pressed.connect(func():
+		dim.queue_free()
+		on_choice.call(overload_max)
+	)
+	vbox.add_child(btn_overload)
+
+	var btn_cancel_choice := UIUtil.make_button(tr("cancel"))
+	btn_cancel_choice.pressed.connect(func(): dim.queue_free())
+	vbox.add_child(btn_cancel_choice)
 
 ## Stacks a small numeric-entry dialog on top of the current overlay, used by
 ## the trade panel's quantity/gold-amount buttons instead of a raw SpinBox --
@@ -627,12 +726,13 @@ func _open_trade_panel() -> void:
 			)
 		)
 		btn_buy_max_capacity.pressed.connect(func():
-			var max_buy := GameState.get_max_sailable_affordable(good.id)
-			_confirm_and_buy(good, max_buy, func():
-				qty_box[0] = max_buy
-				btn_amount.text = UIUtil.format_gold(max_buy)
-				refresh_all_rows.call()
-				refresh_status.call()
+			_open_capacity_choice(good, func(max_buy: int):
+				_confirm_and_buy(good, max_buy, func():
+					qty_box[0] = max_buy
+					btn_amount.text = UIUtil.format_gold(max_buy)
+					refresh_all_rows.call()
+					refresh_status.call()
+				)
 			)
 		)
 		btn_buy_by_gold.pressed.connect(func():
@@ -1086,8 +1186,13 @@ func _on_capacity_offer_available() -> void:
 func _on_millionaire_gift_granted() -> void:
 	_show_message(tr("millionaire_gift_message") % UIUtil.format_gold(GameState.MILLIONAIRE_GIFT_CAPACITY_BONUS))
 
-func _on_mega_capacity_gift_granted() -> void:
-	_show_message(tr("mega_capacity_gift_message") % UIUtil.format_gold(GameState.MEGA_CAPACITY_GIFT_CAPACITY_BONUS))
+func _on_mega_capacity_gift_granted(bonus: int) -> void:
+	_show_message(tr("mega_capacity_gift_message") % UIUtil.format_gold(bonus))
+
+## --- Billionaire gift ---
+
+func _on_billionaire_gift_granted(security_ships_granted: int) -> void:
+	_show_message(tr("billionaire_gift_message") % security_ships_granted)
 
 ## --- Arrival / travel report ---
 

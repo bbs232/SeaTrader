@@ -26,6 +26,7 @@ func save_game() -> void:
 		"capacity_offer_milestone": GameState.capacity_offer_milestone,
 		"millionaire_gift_claimed": GameState.millionaire_gift_claimed,
 		"mega_capacity_gift_milestone": GameState.mega_capacity_gift_milestone,
+		"billionaire_gift_claimed": GameState.billionaire_gift_claimed,
 	}
 	var file := FileAccess.open(SAVE_PATH, FileAccess.WRITE)
 	if file:
@@ -48,6 +49,7 @@ func load_game() -> bool:
 	GameState.game_length_days = parsed.get("game_length_days", 21)
 	GameState.current_day = parsed.get("current_day", 1)
 	GameState.millionaire_gift_claimed = parsed.get("millionaire_gift_claimed", false)
+	GameState.billionaire_gift_claimed = parsed.get("billionaire_gift_claimed", false)
 	GameState.gold = parsed.get("gold", GameState.STARTING_GOLD)
 	GameState.current_port_id = parsed.get("current_port_id", "jaffa")
 	GameState.cargo = parsed.get("cargo", {})

@@ -34,6 +34,31 @@ func _initialize() -> void:
 	GameState.gold = 100
 	print("max-affordable OK")
 
+	# Legal vs overloaded "max capacity" buy choice: legal stops exactly at
+	# nominal ship_capacity, overloaded allows up to the 150% OVERLOAD_ALLOWANCE.
+	GameState.new_game(21, "jaffa")
+	# Gold should not be the limiting factor here, but must stay well under
+	# MILLIONAIRE_GIFT_GOLD_THRESHOLD -- crossing it (or a MEGA_CAPACITY_GIFT_
+	# GOLD_STEP) would grow ship_capacity mid-test and break the "ship starts
+	# at STARTING_CAPACITY" assumption below.
+	GameState.gold = 500_000
+	var legal_max: int = GameState.get_max_legal_capacity_affordable("wheat")
+	var overload_max: int = GameState.get_max_sailable_affordable("wheat")
+	assert(legal_max == GameState.ship_capacity) # hold starts empty
+	assert(overload_max == GameState.get_overload_capacity())
+	assert(overload_max > legal_max)
+	assert(GameState.buy("wheat", legal_max))
+	assert(GameState.get_cargo_used() == GameState.ship_capacity)
+	assert(not GameState.is_overloaded()) # exactly at nominal capacity, not over it
+	var legal_max_after: int = GameState.get_max_legal_capacity_affordable("wheat")
+	assert(legal_max_after == 0) # already full to the legal limit
+	var overload_max_after: int = GameState.get_max_sailable_affordable("wheat")
+	assert(overload_max_after == GameState.get_overload_capacity() - GameState.ship_capacity)
+	assert(GameState.buy("wheat", overload_max_after))
+	assert(GameState.get_cargo_used() == GameState.get_overload_capacity())
+	assert(GameState.is_overloaded())
+	print("legal vs overloaded max-capacity buy OK")
+
 	# Upgrades
 	GameState.gold = 5000
 	assert(GameState.buy_upgrade("cargo1"))
@@ -349,7 +374,7 @@ func _initialize() -> void:
 	GameState.new_game(21, "jaffa")
 	var mega_fired := [0] # boxed in an Array -- lambdas capture locals by value, not by reference
 	var offer_fired2 := [0]
-	GameState.mega_capacity_gift_granted.connect(func(): mega_fired[0] += 1)
+	GameState.mega_capacity_gift_granted.connect(func(_bonus: int): mega_fired[0] += 1)
 	GameState.capacity_offer_available.connect(func(): offer_fired2[0] += 1)
 	GameState.gold = GameState.MEGA_CAPACITY_GIFT_GOLD_STEP - 1 # 99,999,999 -- also crosses several 10M-offer milestones on the way up
 	assert(mega_fired[0] == 0)
@@ -365,15 +390,18 @@ func _initialize() -> void:
 	assert(mega_fired[0] == 2)
 	assert(GameState.ship_capacity == mega_cap_before + GameState.MEGA_CAPACITY_GIFT_CAPACITY_BONUS * 2)
 
-	# A single jump spanning multiple steps grants one gift per step crossed,
-	# not just one for the whole jump.
+	# A single jump spanning multiple steps grants the whole bundled bonus at
+	# once and fires ONE message, not one popup per step crossed (same as the
+	# CAPACITY_OFFER_GOLD_STEP paid offer above).
 	GameState.new_game(21, "jaffa")
 	GameState.gold = GameState.MILLIONAIRE_GIFT_GOLD_THRESHOLD # resolve the one-time millionaire gift first so it doesn't interfere with the delta assertion below
 	var mega_fired2 := [0]
-	GameState.mega_capacity_gift_granted.connect(func(): mega_fired2[0] += 1)
+	var mega_bonus2 := [0]
+	GameState.mega_capacity_gift_granted.connect(func(bonus: int): mega_fired2[0] += 1; mega_bonus2[0] = bonus)
 	var mega_cap_before2: int = GameState.ship_capacity
 	GameState.gold = GameState.MEGA_CAPACITY_GIFT_GOLD_STEP * 3
-	assert(mega_fired2[0] == 3)
+	assert(mega_fired2[0] == 1)
+	assert(mega_bonus2[0] == GameState.MEGA_CAPACITY_GIFT_CAPACITY_BONUS * 3)
 	assert(GameState.ship_capacity == mega_cap_before2 + GameState.MEGA_CAPACITY_GIFT_CAPACITY_BONUS * 3)
 
 	# Milestone persists across save/load, same as capacity_offer_milestone.
@@ -383,6 +411,33 @@ func _initialize() -> void:
 	assert(GameState.mega_capacity_gift_milestone == 3)
 	SaveManager.delete_save()
 	print("mega capacity gift OK")
+
+	# Billionaire gift: one-time free security-ship gift the instant gold ever
+	# reaches BILLIONAIRE_GIFT_GOLD_THRESHOLD, same one-shot pattern as the
+	# millionaire warehouse gift, just granting escort ships instead.
+	GameState.new_game(21, "jaffa")
+	var billionaire_fired := [0]
+	var billionaire_ships := [0]
+	GameState.billionaire_gift_granted.connect(func(ships: int): billionaire_fired[0] += 1; billionaire_ships[0] = ships)
+	GameState.gold = GameState.BILLIONAIRE_GIFT_GOLD_THRESHOLD - 1
+	assert(billionaire_fired[0] == 0)
+	var security_before: int = GameState.security_ships
+	GameState.gold = GameState.BILLIONAIRE_GIFT_GOLD_THRESHOLD
+	assert(billionaire_fired[0] == 1)
+	assert(billionaire_ships[0] == GameState.BILLIONAIRE_GIFT_SECURITY_SHIPS)
+	assert(GameState.security_ships == security_before + GameState.BILLIONAIRE_GIFT_SECURITY_SHIPS)
+	GameState.gold += 500 # still above threshold -- must not refire
+	assert(billionaire_fired[0] == 1)
+	assert(GameState.security_ships == security_before + GameState.BILLIONAIRE_GIFT_SECURITY_SHIPS)
+	# Claimed flag must persist across save/load, or reloading a save already
+	# past the threshold would double-grant the escort ships.
+	SaveManager.save_game()
+	var security_after: int = GameState.security_ships
+	assert(SaveManager.load_game())
+	assert(GameState.billionaire_gift_claimed)
+	assert(GameState.security_ships == security_after)
+	SaveManager.delete_save()
+	print("billionaire gift OK")
 
 	# Save/Load round trip
 	SaveManager.save_game()

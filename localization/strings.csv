@@ -44,6 +44,9 @@ trade_buy,קנה,Buy
 trade_sell,מכור,Sell
 trade_max,מקס׳ זהב,Max Gold
 trade_max_capacity,מקס׳ קיבולת,Max Cap.
+capacity_choice_title,עד כמה לטעון?,How much to load?
+capacity_choice_legal,עד קיבולת חוקית (%s) -- ללא סיכון עומס יתר,Up to legal capacity (%s) -- no overload risk
+capacity_choice_overload,עד קיבולת עם חריגה (%s) -- עד 150%% מהקיבולת,Up to overloaded capacity (%s) -- up to 150%% of capacity
 trade_buy_by_gold,לפי כסף,By Gold
 quantity_dialog_title,הזן כמות,Enter Quantity
 gold_dialog_title,הזן סכום זהב,Enter Gold Amount
@@ -85,6 +88,7 @@ capacity_offer_accept,קבל את ההצעה,Accept the Offer
 capacity_offer_decline,סרב,Decline
 millionaire_gift_message,הגעתם למיליון זהב! כמתנה חגיגית מחסן הספינה שלכם גדל ב-%s יחידות קיבולת -- ללא תנאים.,You've reached one million gold! As a congratulatory gift your ship's hold has grown by %s capacity units -- no strings attached.
 mega_capacity_gift_message,עוד 100 מיליון זהב! מחסן הספינה שלכם גדל ב-%s יחידות קיבולת נוספות -- ללא תנאים.,Another 100 million gold! Your ship's hold has grown by another %s capacity units -- no strings attached.
+billionaire_gift_message,"מיליארד זהב?! ברכות ענקיות וחמות מכל צוות הספינה -- הגעתם להישג אגדי שרק בודדים בהיסטוריה חלמו עליו! מרגע זה אתם רשמית חברים ברשימה האקסקלוסיבית והיוקרתית ביותר עלי אדמות: מועדון עשירי העולם, ממש לצד שמות כמו אילון מאסק, ג'ף בזוס ולארי פייג'. עשרת עשירי העולם, כפי שהם נחרטים כעת בספר השיאים של המשחק: 1. אילון מאסק, 2. ג'ף בזוס, 3. ברנאר ארנו, 4. לארי אליסון, 5. מארק צוקרברג, 6. לארי פייג', 7. סרגיי ברין, 8. וורן באפט, 9. ביל גייטס, 10. סטיב באלמר -- ועכשיו, איפשהו שם, מתנוסס גם השם שלכם. לרגל ההישג המדהים הזה, %s ספינות אבטחה חדשות ומפוארות מצטרפות לצי שלכם במתנה, ללא תנאים -- שיזכירו לכל מי שמעז להתעסק אתכם בים מי הבוס האמיתי של המים האלה.","A billion gold?! Huge, heartfelt congratulations from the whole crew -- you've just pulled off a legendary feat only a handful in history have ever dreamed of! From this moment on, you're officially a member of the most exclusive and prestigious club on the planet: the world's richest, right alongside names like Elon Musk, Jeff Bezos, and Larry Page. The world's top 10 richest, as now etched into this game's record book: 1. Elon Musk, 2. Jeff Bezos, 3. Bernard Arnault, 4. Larry Ellison, 5. Mark Zuckerberg, 6. Larry Page, 7. Sergey Brin, 8. Warren Buffett, 9. Bill Gates, 10. Steve Ballmer -- and now, somewhere in there, your name too. To celebrate this astonishing achievement, %s brand-new, magnificent security ships join your fleet as a gift, no strings attached -- a reminder to anyone who dares mess with you at sea of who really rules these waters."
 pirates_title,פיראטים!,Pirates!
 pirates_desc,ספינת פיראטים מתקרבת. מה תעשה?,A pirate ship approaches. What will you do?
 pirates_fight,הילחם,Fight
