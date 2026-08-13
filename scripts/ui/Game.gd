@@ -1038,7 +1038,11 @@ func _format_pirate_result(result: Dictionary) -> String:
 		"escaped":
 			return tr("log_pirates_escaped")
 		"caught":
-			return tr("log_pirates_caught") % UIUtil.format_gold(result.get("ransom", 0))
+			var text := tr("log_pirates_caught") % UIUtil.format_gold(result.get("ransom", 0))
+			var lost_goods: Dictionary = result.get("lost_goods", {})
+			if not lost_goods.is_empty():
+				text += "\n" + tr("log_pirates_caught_goods") % _format_goods_list(lost_goods)
+			return text
 		"paid":
 			return tr("log_pirates_paid") % UIUtil.format_gold(result.get("ransom", 0))
 		_:
@@ -1058,7 +1062,7 @@ func _on_capacity_offer_available() -> void:
 	panel.add_child(vbox)
 
 	vbox.add_child(UIUtil.make_title(tr("capacity_offer_title"), 22))
-	vbox.add_child(UIUtil.make_label(tr("capacity_offer_desc") % UIUtil.format_gold(GameState.CAPACITY_OFFER_CAPACITY_BONUS), 16))
+	vbox.add_child(UIUtil.make_label(tr("capacity_offer_desc") % UIUtil.format_gold(GameState.get_capacity_offer_capacity_bonus()), 16))
 	var cost_text: String
 	if pay_with_goods:
 		cost_text = tr("capacity_offer_cost_goods")

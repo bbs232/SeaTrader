@@ -287,6 +287,23 @@ func _initialize() -> void:
 	assert(GameState.cargo.get("silk", 0) < cargo_before)
 	print("capacity offer OK")
 
+	# A single trade that jumps gold across several CAPACITY_OFFER_GOLD_STEP
+	# milestones in one go (e.g. 10M -> 60M) must surface ONE combined offer
+	# bundling all the steps crossed (bigger bonus, one payment), not a
+	# separate popup per step.
+	GameState.new_game(21, "jaffa")
+	var offer_fired3 := [0] # boxed in an Array -- lambdas capture locals by value, not by reference
+	GameState.capacity_offer_available.connect(func(): offer_fired3[0] += 1)
+	GameState.gold = GameState.CAPACITY_OFFER_GOLD_STEP * 6
+	assert(offer_fired3[0] == 1)
+	assert(GameState.capacity_offer_milestone == 6)
+	assert(GameState.capacity_offer_pending_steps == 6)
+	assert(GameState.get_capacity_offer_capacity_bonus() == GameState.CAPACITY_OFFER_CAPACITY_BONUS * 6)
+	var bundled_cap_before: int = GameState.ship_capacity
+	GameState.accept_capacity_offer()
+	assert(GameState.ship_capacity == bundled_cap_before + GameState.CAPACITY_OFFER_CAPACITY_BONUS * 6)
+	print("capacity offer bundles several milestones crossed in one jump into a single offer OK")
+
 	# The milestone must persist across save/load, or reloading a save already
 	# past a threshold would immediately re-offer.
 	GameState.new_game(21, "jaffa")

@@ -10,7 +10,7 @@ signal millionaire_gift_granted()
 signal mega_capacity_gift_granted()
 
 ## Bumped by one on every gameplay/UI update shipped, shown in the main menu footer.
-const GAME_VERSION := "2.9"
+const GAME_VERSION := "3.3"
 
 const STARTING_GOLD := 500
 const STARTING_CAPACITY := 85
@@ -38,6 +38,8 @@ const PIRATE_LOOT_QTY_MAX := 30
 const PIRATE_LOOT_BIG_HAUL_CHANCE := 0.12 # rare chance for a single looted good to be a real windfall
 const PIRATE_LOOT_BIG_HAUL_MULT_MIN := 4
 const PIRATE_LOOT_BIG_HAUL_MULT_MAX := 9
+const PIRATE_CAUGHT_CARGO_LOSS_MIN := 0.15 # getting caught fleeing also costs a slice of cargo, not just gold...
+const PIRATE_CAUGHT_CARGO_LOSS_MAX := 0.35 # ...somewhat lighter than a lost fight's jettison (see "fight" -> lost)
 const HALF_DAY_EVENT_SCALE := 0.5 # a half-day-only leg's event chance, relative to a full travel day's
 const CAPACITY_OFFER_GOLD_STEP := 10_000_000 # each multiple of gold reached unlocks a one-time special cargo-capacity offer
 const CAPACITY_OFFER_CAPACITY_BONUS := 100_000 # flat cargo-hold increase the offer grants, unconditionally
@@ -72,6 +74,12 @@ var savings: float = 0.0
 ## Highest CAPACITY_OFFER_GOLD_STEP multiple already surfaced as a special
 ## offer (see _check_capacity_offer), so each milestone only prompts once.
 var capacity_offer_milestone: int = 0
+## How many CAPACITY_OFFER_GOLD_STEP milestones the currently-pending offer
+## bundles together (usually 1; more if a single trade jumped gold across
+## several steps at once -- see _check_capacity_offer). Not persisted across
+## save/load: it only matters between the offer being surfaced and resolved,
+## same as pending_encounter.
+var capacity_offer_pending_steps: int = 1
 ## Whether the one-time MILLIONAIRE_GIFT_GOLD_THRESHOLD warehouse gift has
 ## already been granted (see _check_millionaire_gift), so it only fires once.
 var millionaire_gift_claimed: bool = false
@@ -331,6 +339,12 @@ func get_capacity_offer_gold_cost() -> int:
 func get_capacity_offer_goods_value() -> int:
 	return int(ceil(get_cargo_value_at_current_port() * CAPACITY_OFFER_COST_RATIO))
 
+## The capacity bonus granted by the currently-pending offer -- a multiple of
+## CAPACITY_OFFER_CAPACITY_BONUS when it bundles several milestones crossed
+## in one jump (see capacity_offer_pending_steps).
+func get_capacity_offer_capacity_bonus() -> int:
+	return CAPACITY_OFFER_CAPACITY_BONUS * capacity_offer_pending_steps
+
 ## The capacity bonus is unconditional -- payment is taken in whichever of
 ## gold or goods (valued at the current port) is worth more, never both.
 func accept_capacity_offer() -> void:
@@ -338,7 +352,7 @@ func accept_capacity_offer() -> void:
 		_jettison_cargo(CAPACITY_OFFER_COST_RATIO)
 	else:
 		gold -= get_capacity_offer_gold_cost()
-	ship_capacity += CAPACITY_OFFER_CAPACITY_BONUS
+	ship_capacity += get_capacity_offer_capacity_bonus()
 
 ## --- Ship upgrades ---
 
@@ -576,9 +590,16 @@ func _advance_day() -> void:
 ## tracks the highest one already surfaced so it only fires once per step.
 ## Checked on every gold change (see the gold setter), same as
 ## _check_millionaire_gift, so it fires the moment the milestone is crossed.
+## A single gold jump spanning several steps (e.g. a huge sale) still counts
+## every step crossed instead of silently dropping the skipped-over ones --
+## but unlike _check_mega_capacity_gift's free, repeatable gift, this is a
+## single paid offer, so the steps are bundled into capacity_offer_pending_steps
+## and surfaced as ONE combined offer (bigger bonus, one payment) rather than
+## one popup per step.
 func _check_capacity_offer() -> void:
 	var milestone := int(gold) / CAPACITY_OFFER_GOLD_STEP
 	if milestone > capacity_offer_milestone:
+		capacity_offer_pending_steps = milestone - capacity_offer_milestone
 		capacity_offer_milestone = milestone
 		capacity_offer_available.emit()
 
@@ -773,8 +794,10 @@ func resolve_pirate_encounter(choice: String) -> Dictionary:
 			else:
 				var ransom := _roll_ransom(0.1, 0.25)
 				gold -= ransom
+				var lost_goods := _jettison_cargo(randf_range(PIRATE_CAUGHT_CARGO_LOSS_MIN, PIRATE_CAUGHT_CARGO_LOSS_MAX))
 				result["outcome"] = "caught"
 				result["ransom"] = ransom
+				result["lost_goods"] = lost_goods
 		"pay":
 			var demand := _roll_ransom(0.05, 0.15)
 			gold -= demand

@@ -95,6 +95,7 @@ log_pirates_won_goods,וגם תפסת מהמטען שלהם: %s,And also seized 
 log_pirates_lost,הפסדת בקרב והפיראטים שדדו חלק מהמטען שלך.,You lost the fight and the pirates looted some of your cargo.
 log_pirates_escaped,הצלחת לברוח מהפיראטים!,You escaped the pirates!
 log_pirates_caught,הפיראטים תפסו אותך ולקחו %s זהב.,The pirates caught you and took %s gold.
+log_pirates_caught_goods,וגם לקחו מהמטען שלך: %s,And also took from your cargo: %s
 log_pirates_paid,שילמת %s זהב כופר לפיראטים.,You paid %s gold ransom to the pirates.
 travel_uneventful,ההפלגה עברה בשלום.,The voyage passed without incident.
 log_storm_none,סערה עברה לידכם ללא נזק.,A storm passed nearby without damage.
