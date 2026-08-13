@@ -31,6 +31,7 @@ var port_buttons: Dictionary = {} # port_id -> TextureButton
 var port_labels: Dictionary = {} # port_id -> Label
 var ship_icon: TextureRect
 var hud_label: Label
+var menu_btn: Button
 var dock_panel: PanelContainer
 var map_bg: TextureRect
 
@@ -143,18 +144,26 @@ func _build_hud() -> void:
 	hud_label = UIUtil.make_label("", 20)
 	bg.add_child(hud_label)
 
-	var menu_btn := UIUtil.make_button(tr("menu_button"), 44, 18)
+	menu_btn = UIUtil.make_button(tr("menu_button"), 44, 18)
 	menu_btn.mouse_filter = Control.MOUSE_FILTER_STOP
 	menu_btn.layout_direction = Control.LAYOUT_DIRECTION_LTR
 	menu_btn.pressed.connect(_on_menu_pressed)
 	hud_layer.add_child(menu_btn)
 	menu_btn.size = Vector2(140, 40)
-	# Anchored to the physical top-right corner (not a fixed x position) so it
-	# stays pinned there regardless of the canvas's actual width -- under
-	# window/stretch/aspect="expand" that width can exceed MAP_DESIGN_SIZE.x
-	# on non-16:9 screens.
-	menu_btn.set_anchors_preset(Control.PRESET_TOP_RIGHT)
-	menu_btn.position = Vector2(-150, 8)
+	# Positioned from the actual current canvas width (not an anchor preset --
+	# Control.set_anchors_preset() mirrors TOP_RIGHT/TOP_LEFT for RTL locales
+	# even when this node's own layout_direction is forced LTR, which sent it
+	# flying to the physical left instead) so it stays pinned to the true
+	# right edge regardless of width -- under window/stretch/aspect="expand"
+	# that width can exceed MAP_DESIGN_SIZE.x on non-16:9 screens. Reapplied
+	# on resize below, same reasoning as _reposition_map().
+	_reposition_hud()
+	resized.connect(_reposition_hud)
+
+## Keeps the menu button pinned to the true physical top-right corner as the
+## canvas size changes (see the comment in _build_hud()).
+func _reposition_hud() -> void:
+	menu_btn.position = Vector2(size.x - 150, 8)
 
 func _build_dock() -> void:
 	dock_panel = UIUtil.make_panel()
