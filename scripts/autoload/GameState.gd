@@ -11,7 +11,7 @@ signal mega_capacity_gift_granted(bonus: int)
 signal billionaire_gift_granted(security_ships_granted: int)
 
 ## Bumped by one on every gameplay/UI update shipped, shown in the main menu footer.
-const GAME_VERSION := "3.6"
+const GAME_VERSION := "3.9"
 
 const STARTING_GOLD := 500
 const STARTING_CAPACITY := 85
@@ -689,8 +689,17 @@ func _trigger_event(ev: EventDef) -> void:
 		EventDef.Kind.PIRATES:
 			_start_pirate_encounter()
 		EventDef.Kind.FAIR_WIND:
-			travel_half_days_remaining = max(0, travel_half_days_remaining - 2)
-			travel_log.append({"type": "fair_wind"})
+			# The event roll always lands exactly when the leg's own travel
+			# time (this half-day-carry checkpoint) is spent, so at most
+			# travel_half_days_remaining is left to actually cut -- capping
+			# at that (instead of always assuming a full day, i.e. 2) avoids
+			# claiming a full day was shaved off a leg that had none left, or
+			# only half a day left (a standalone half-day leg has none left
+			# by this point at all, so fair wind silently has no effect then).
+			var shortened: int = min(2, travel_half_days_remaining)
+			if shortened > 0:
+				travel_half_days_remaining -= shortened
+				travel_log.append({"type": "fair_wind", "half_days": shortened})
 		EventDef.Kind.MARKET_DEMAND:
 			_apply_market_demand()
 		EventDef.Kind.AGROUND:

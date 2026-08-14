@@ -16,6 +16,9 @@ length_unknown,אורך לא ידוע,Unknown length
 cancel,ביטול,Cancel
 highscores_title,לוח השיאים,High Scores
 highscores_empty,אין עדיין שיאים,No scores yet
+highscores_col_name,שם,Name
+highscores_col_networth,הון נקי,Net Worth
+highscores_col_details,פרטים,Details
 close,סגור,Close
 menu_button,תפריט,Menu
 action_trade,מסחר,Trade
@@ -109,6 +112,7 @@ log_aground_loss,עליתם על שרטון! איבדתם: %s (תיקון: %s ז
 log_overload_minor,הצוות זרק חלק מהמטען העודף לים כדי לייצב את הספינה: %s,The crew threw some of the excess cargo overboard to stabilize the ship: %s
 log_overload_severe,עומס היתר שבר חלק מהספינה! איבדתם: %s (תיקון: %s זהב),The overload broke part of the ship! Lost: %s (repairs: %s gold)
 log_fair_wind,רוח גבית קיצרה את זמן ההפלגה ביום אחד.,A fair wind shortened the voyage by one day.
+log_fair_wind_half_day,רוח גבית קיצרה את זמן ההפלגה בחצי יום.,A fair wind shortened the voyage by half a day.
 log_warehouse_fire,שריפה פרצה במחסן במהלך הלילה! איבדתם: %s,A fire broke out in the warehouse overnight! You lost: %s
 log_warehouse_theft,גנבים פרצו למחסן במהלך הלילה! איבדתם: %s,Thieves broke into the warehouse overnight! You lost: %s
 log_market_demand,שמועות על ביקוש גבוה הביאו לעלייה דרמטית במחיר ה%s ביעד (כעת %s זהב).,Rumors of high demand caused the price of %s to spike dramatically at your destination (now %s gold).

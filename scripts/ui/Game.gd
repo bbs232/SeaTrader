@@ -531,6 +531,7 @@ func _open_quantity_dialog(current: int, on_set: Callable, title_key: String = "
 	edit.custom_minimum_size = Vector2(0, 48)
 	edit.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
 	edit.select_all_on_focus = true
+	UIUtil.wire_live_gold_formatting(edit)
 	vbox.add_child(edit)
 
 	var apply := func():
@@ -1241,6 +1242,8 @@ func _format_log_entry(entry: Dictionary) -> String:
 				return tr("log_overload_severe") % [_format_goods_list(lost), UIUtil.format_gold(repair_cost)]
 			return tr("log_overload_minor") % _format_goods_list(lost)
 		"fair_wind":
+			if entry.get("half_days", 2) == 1:
+				return tr("log_fair_wind_half_day")
 			return tr("log_fair_wind")
 		"market_demand":
 			var good := GameState.get_good(entry.get("good_id", ""))
@@ -1267,10 +1270,19 @@ func _format_goods_list(lost: Dictionary) -> String:
 func _show_message(text: String) -> void:
 	var panel := _open_overlay()
 	var vbox := VBoxContainer.new()
-	vbox.custom_minimum_size = Vector2(380, 0)
+	# Wide enough for the longer congratulatory messages (millionaire/mega/
+	# billionaire gifts) to wrap into a readable paragraph instead of running
+	# off-screen as one unwrapped line -- same width as the rules panel,
+	# which has the same "arbitrarily long body text" shape. _open_overlay()
+	# already wraps every dialog in a full-screen ScrollContainer, so a
+	# message tall enough to exceed the screen scrolls the same way rules do.
+	vbox.custom_minimum_size = Vector2(600, 0)
 	vbox.add_theme_constant_override("separation", 12)
 	panel.add_child(vbox)
-	vbox.add_child(UIUtil.make_label(text, 18))
+	var label := UIUtil.make_label(text, 18)
+	label.autowrap_mode = TextServer.AUTOWRAP_WORD
+	label.custom_minimum_size = Vector2(580, 0)
+	vbox.add_child(label)
 	var btn_ok := UIUtil.make_button(tr("ok"))
 	btn_ok.pressed.connect(_close_overlay)
 	vbox.add_child(btn_ok)

@@ -3,13 +3,16 @@ extends SceneTree
 ## godot --headless --script res://tests/ui_smoke_test.gd
 
 var GameState
+var SaveManager
 
 func _initialize() -> void:
 	GameState = root.get_node("GameState")
+	SaveManager = root.get_node("SaveManager")
 	print("=== UI smoke test ===")
 
 	GameState.new_game(10, "jaffa")
 	_test_scene("res://scenes/MainMenu.tscn")
+	await _test_mainmenu_highscores()
 	await _test_game_overlays()
 
 	GameState.new_game(1, "jaffa")
@@ -18,6 +21,27 @@ func _initialize() -> void:
 
 	print("=== ALL UI SMOKE TESTS PASSED ===")
 	quit()
+
+## Exercises the high-score table with both no entries (empty-state message)
+## and at least one entry (the ranked grid, including the rank-1 gold-star
+## badge path) so a format-string or column-count mistake in either branch
+## would surface here instead of only in a manual playtest.
+func _test_mainmenu_highscores() -> void:
+	var packed: PackedScene = load("res://scenes/MainMenu.tscn")
+	var instance := packed.instantiate()
+	root.add_child(instance)
+	await process_frame
+
+	instance.call("_on_highscores_pressed") # empty-state branch
+	instance._highscores_layer.queue_free()
+	instance._highscores_layer = null
+
+	SaveManager.add_highscore("UI smoke test", 12345)
+	instance.call("_on_highscores_pressed") # ranked grid branch
+	instance._highscores_layer.queue_free()
+
+	instance.queue_free()
+	print("highscores panel OK")
 
 func _test_game_overlays() -> void:
 	var packed: PackedScene = load("res://scenes/Game.tscn")
@@ -108,6 +132,25 @@ func _test_game_overlays() -> void:
 	instance.call("_show_message", "test message")
 	instance.call("_close_overlay")
 	print("message panel OK")
+
+	# Live gold-formatting on numeric entry fields (quantity/gold-amount
+	# dialogs): typing a large number should stay grouped with thousands-
+	# separator commas as it's typed, not run together as bare digits.
+	# text_changed only fires from real user edits, not a plain .text
+	# assignment, so simulate a keystroke by setting text+caret first and
+	# then emitting the signal manually, same as the real LineEdit would.
+	var edit := LineEdit.new()
+	UIUtil.wire_live_gold_formatting(edit)
+	edit.text = "1000000000"
+	edit.caret_column = 10
+	edit.text_changed.emit(edit.text)
+	assert(edit.text == "1,000,000,000")
+	assert(edit.caret_column == edit.text.length()) # caret was at the end -- should still be
+	edit.text = ""
+	edit.caret_column = 0
+	edit.text_changed.emit(edit.text)
+	assert(edit.text == "")
+	print("live gold-formatted input OK")
 
 	instance.queue_free()
 	print("instantiated OK: res://scenes/Game.tscn (overlays)")

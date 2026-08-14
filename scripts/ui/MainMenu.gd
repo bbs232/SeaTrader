@@ -134,8 +134,8 @@ func _on_highscores_pressed() -> void:
 	center.add_child(panel)
 
 	var vbox := VBoxContainer.new()
-	vbox.custom_minimum_size = Vector2(420, 0)
-	vbox.add_theme_constant_override("separation", 8)
+	vbox.custom_minimum_size = Vector2(560, 0)
+	vbox.add_theme_constant_override("separation", 10)
 	panel.add_child(vbox)
 
 	vbox.add_child(UIUtil.make_title(tr("highscores_title"), 26))
@@ -144,15 +144,58 @@ func _on_highscores_pressed() -> void:
 	if scores.is_empty():
 		vbox.add_child(UIUtil.make_label(tr("highscores_empty"), 18))
 	else:
+		var grid := GridContainer.new()
+		grid.columns = 4
+		grid.add_theme_constant_override("h_separation", 18)
+		grid.add_theme_constant_override("v_separation", 10)
+		vbox.add_child(grid)
+
+		grid.add_child(UIUtil.make_label("", 14))
+		var header_name := UIUtil.make_label(tr("highscores_col_name"), 14, Color("#9FB6BE"))
+		grid.add_child(header_name)
+		var header_networth := UIUtil.make_label(tr("highscores_col_networth"), 14, Color("#9FB6BE"))
+		header_networth.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
+		grid.add_child(header_networth)
+		var header_details := UIUtil.make_label(tr("highscores_col_details"), 14, Color("#9FB6BE"))
+		header_details.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
+		grid.add_child(header_details)
+
 		var i := 1
 		for entry in scores:
-			var line := "%d. %s — %s — %s (%s)" % [i, entry.get("name", "?"), UIUtil.format_gold(entry.get("net_worth", 0)), _length_label(entry.get("days", 0)), entry.get("date", "")]
-			vbox.add_child(UIUtil.make_label(line, 18))
+			var rank_label := UIUtil.make_label(_rank_badge(i), 20, _rank_color(i))
+			rank_label.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
+			rank_label.custom_minimum_size = Vector2(36, 0)
+			grid.add_child(rank_label)
+
+			grid.add_child(UIUtil.make_label(String(entry.get("name", "?")), 17))
+
+			var worth_label := UIUtil.make_label(UIUtil.format_gold(entry.get("net_worth", 0)), 17, Color("#D9A441"))
+			worth_label.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
+			grid.add_child(worth_label)
+
+			var details_label := UIUtil.make_label("%s\n%s" % [_length_label(entry.get("days", 0)), entry.get("date", "")], 12, Color("#9FB6BE"))
+			details_label.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
+			grid.add_child(details_label)
+
 			i += 1
 
 	var btn_close := UIUtil.make_button(tr("close"))
 	btn_close.pressed.connect(func(): _highscores_layer.queue_free())
 	vbox.add_child(btn_close)
+
+## Top 3 ranks get a gold/silver/bronze star instead of a bare number, so the
+## podium stands out at a glance; everyone past that is just "4.", "5.", etc.
+func _rank_badge(rank: int) -> String:
+	if rank <= 3:
+		return "★"
+	return "%d." % rank
+
+func _rank_color(rank: int) -> Color:
+	match rank:
+		1: return Color("#FFD700") # gold
+		2: return Color("#C8CDD3") # silver
+		3: return Color("#CD7F32") # bronze
+		_: return Color("#FFF6E3")
 
 ## Maps a saved score's game length (in days) to its display label, so the
 ## high-score table shows what the run was measured against. Older scores

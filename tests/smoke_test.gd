@@ -171,6 +171,43 @@ func _initialize() -> void:
 	assert(GameState.half_day_carry == 0)
 	print("half-day carry-over OK")
 
+	# Fair wind must never claim to shorten a voyage by more than what's
+	# actually left at the moment it's rolled -- the event always fires right
+	# when the leg's own travel time is spent, so a standalone half-day leg
+	# (nothing left by then) must see NO effect/log entry at all, an odd
+	# leftover half-day gets logged/cut as half a day (not rounded up to a
+	# full day), and only when a full day is genuinely still ahead does it
+	# get cut and logged as a full day.
+	var fair_wind_ev: EventDef = null
+	for ev in GameState.events:
+		if ev.id == "fair_wind":
+			fair_wind_ev = ev
+	assert(fair_wind_ev != null)
+
+	GameState.new_game(21, "jaffa")
+	GameState.travel_half_days_remaining = 0 # standalone half-day leg, already fully spent by roll time
+	GameState.travel_log.clear()
+	GameState.call("_trigger_event", fair_wind_ev)
+	assert(GameState.travel_half_days_remaining == 0)
+	assert(GameState.travel_log.is_empty())
+
+	GameState.new_game(21, "jaffa")
+	GameState.travel_half_days_remaining = 1 # odd leftover half-day
+	GameState.travel_log.clear()
+	GameState.call("_trigger_event", fair_wind_ev)
+	assert(GameState.travel_half_days_remaining == 0)
+	assert(GameState.travel_log.size() == 1)
+	assert(GameState.travel_log[0]["half_days"] == 1)
+
+	GameState.new_game(21, "jaffa")
+	GameState.travel_half_days_remaining = 2 # a full day genuinely still ahead
+	GameState.travel_log.clear()
+	GameState.call("_trigger_event", fair_wind_ev)
+	assert(GameState.travel_half_days_remaining == 0)
+	assert(GameState.travel_log.size() == 1)
+	assert(GameState.travel_log[0]["half_days"] == 2)
+	print("fair wind never over-claims a shortened day OK")
+
 	# Piraeus <-> Venice sails directly, half a day -- still just one event
 	# roll for the whole hop.
 	GameState.new_game(21, "jaffa")

@@ -14,6 +14,42 @@ static func format_gold(amount: int) -> String:
 	groups.push_front(digits.substr(0, i))
 	return sign + ",".join(groups)
 
+## Wires a numeric-entry LineEdit to keep itself live-formatted with
+## thousands-separator commas (via format_gold) as the player types, so a
+## typed-in amount stays readable digit-group by digit-group (hundreds of
+## thousands, millions, hundreds of millions...) instead of running together
+## as one undifferentiated string of digits. Re-derives the caret position
+## from how many actual digits (not commas) sat before it, so typing/deleting
+## mid-string doesn't jump the caret to an unrelated spot once commas shift.
+static func wire_live_gold_formatting(edit: LineEdit) -> void:
+	var reentrant := [false] # boxed -- lambdas capture locals by value, not by reference
+	edit.text_changed.connect(func(new_text: String):
+		if reentrant[0]:
+			return
+		reentrant[0] = true
+		var caret: int = edit.caret_column
+		var digits_before_caret := 0
+		for i in range(mini(caret, new_text.length())):
+			if new_text[i] != ",":
+				digits_before_caret += 1
+		var digits := ""
+		for c in new_text:
+			if c >= "0" and c <= "9":
+				digits += c
+		var formatted := format_gold(int(digits)) if digits != "" else ""
+		edit.text = formatted
+		var new_caret := formatted.length()
+		var seen := 0
+		for i in range(formatted.length()):
+			if seen >= digits_before_caret:
+				new_caret = i
+				break
+			if formatted[i] != ",":
+				seen += 1
+		edit.caret_column = new_caret
+		reentrant[0] = false
+	)
+
 static func make_button(text: String, min_h: int = 56, font_size: int = 24) -> Button:
 	var b := Button.new()
 	b.text = text
@@ -152,7 +188,7 @@ const _RULES_HE := """מטרת המשחק
 עלולה להופיע ספינת פיראטים. ניתן להילחם (תלוי בחיזוק הספינה), לברוח (תלוי במפרשים), או לשלם כופר ולהיפטר מהעימות מיד.
 
 אירועים בדרך
-סערה ושרטון עלולים לגרום לאובדן מטען ולעלות תיקון בזהב (שרטון תמיד גובה עלות תיקון). רוח גבית מקצרת את ההפלגה ביום. שמועות ביקוש מעלות דרמטית (אף פעם לא מורידות) מחיר של סחורה אקראית בנמל היעד שאליו אתם מפליגים. שדרוגי חיזוק מקטינים סיכוני נזק.
+סערה ושרטון עלולים לגרום לאובדן מטען ולעלות תיקון בזהב (שרטון תמיד גובה עלות תיקון). רוח גבית מקצרת את ההפלגה ביום, או בחצי יום אם זה כל מה שנותר. שמועות ביקוש מעלות דרמטית (אף פעם לא מורידות) מחיר של סחורה אקראית בנמל היעד שאליו אתם מפליגים. שדרוגי חיזוק מקטינים סיכוני נזק.
 
 עומס יתר
 ניתן לטעון עד פי 1.5 מהקיבולת הנקובה של הספינה, אך כל יום הפלגה בעומס יתר יש סיכון הולך וגדל לאובדן מטען עודף, ובמקרים חמורים גם נזק לספינה שדורש תיקון בזהב.
@@ -188,7 +224,7 @@ Pirates
 A pirate ship may appear during a voyage. You can fight (depends on hull upgrades), flee (depends on sail upgrades), or pay a ransom to end the encounter immediately.
 
 Events at sea
-Storms and running aground can cause cargo loss and a gold repair cost (running aground always costs a repair fee). A fair wind shortens the voyage by a day. Rumors of high demand cause the price of a random good to spike dramatically (never drop) at the port you're actually sailing to. Hull upgrades reduce damage risk.
+Storms and running aground can cause cargo loss and a gold repair cost (running aground always costs a repair fee). A fair wind shortens the voyage by a day, or by half a day if that's all that's left. Rumors of high demand cause the price of a random good to spike dramatically (never drop) at the port you're actually sailing to. Hull upgrades reduce damage risk.
 
 Overload
 You can load up to 1.5x the ship's nominal capacity, but every day sailing overloaded carries a growing risk of losing excess cargo, and in severe cases hull damage requiring a gold repair.
