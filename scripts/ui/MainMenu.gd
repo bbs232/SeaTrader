@@ -67,13 +67,38 @@ func _build_ui() -> void:
 	version_label.offset_bottom = -8
 	add_child(version_label)
 
-## Web builds are static files the browser caches aggressively (see
-## tools/export-web.ps1); a normal in-page navigation can still serve a
-## stale cached copy, so this forces the browser to bypass its cache and
-## re-fetch the current build, same as a manual hard-refresh (Ctrl+Shift+R).
+## Web builds are served by a PWA service worker (see tools/export-web.ps1)
+## which answers every fetch straight from its own cache — a plain
+## location.reload() never reaches the network, so it can't notice a new
+## build. This instead forces the service worker to check for an update,
+## and if one is found, activates it and reloads via its own 'update'
+## message handler (see builds/web/index.service.worker.js).
 func _on_refresh_pressed() -> void:
 	if OS.has_feature("web"):
-		JavaScriptBridge.eval("location.reload(true);")
+		JavaScriptBridge.eval("""
+			(async () => {
+				try {
+					if (!('serviceWorker' in navigator)) { location.reload(); return; }
+					const reg = await navigator.serviceWorker.getRegistration();
+					if (!reg) { location.reload(); return; }
+					await reg.update();
+					const sw = reg.waiting || reg.installing;
+					if (sw) {
+						if (sw.state === 'installed' || sw.state === 'redundant') {
+							sw.postMessage('update');
+						} else {
+							sw.addEventListener('statechange', (e) => {
+								if (e.target.state === 'installed') e.target.postMessage('update');
+							});
+						}
+					} else {
+						location.reload();
+					}
+				} catch (e) {
+					location.reload();
+				}
+			})();
+		""")
 
 func _on_new_game_pressed() -> void:
 	_length_dialog_layer = CanvasLayer.new()
