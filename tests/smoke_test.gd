@@ -490,5 +490,156 @@ func _initialize() -> void:
 	assert(scores.size() >= 1)
 	print("highscores OK")
 
+	# --- Multiplayer (hotseat) ---
+
+	# Setup: 3 independent players sharing one calendar day and one market.
+	GameState.new_multiplayer_game(21, ["Alice", "Bob", "Cleo"], "jaffa")
+	assert(GameState.player_count == 3)
+	assert(GameState.current_player_index == 0)
+	assert(GameState.players.size() == 3)
+	assert(GameState.players[0].player_name == "Alice")
+	assert(GameState.players[1].player_name == "Bob")
+	assert(GameState.players[2].player_name == "Cleo")
+	for p in GameState.players:
+		assert(p.gold == GameState.STARTING_GOLD)
+		assert(p.current_port_id == "jaffa")
+	print("multiplayer setup OK")
+
+	# Per-player isolation: trading as the active player must not leak into
+	# the others' wallets/cargo -- they only ever see whoever's turn it is.
+	assert(GameState.buy("wheat", 5))
+	assert(GameState.cargo.get("wheat", 0) == 5)
+	assert(GameState.players[0].cargo.get("wheat", 0) == 5)
+	assert(GameState.players[1].cargo.get("wheat", 0) == 0)
+	assert(GameState.players[2].cargo.get("wheat", 0) == 0)
+	assert(GameState.players[0].gold < GameState.STARTING_GOLD)
+	assert(GameState.players[1].gold == GameState.STARTING_GOLD)
+	print("multiplayer per-player isolation OK")
+
+	# Turn order / round completion: the shared day only advances once every
+	# player has ended their turn -- not after each individual player.
+	var mp_day_before: int = GameState.current_day
+	GameState.end_turn() # Alice -> Bob
+	assert(GameState.current_player_index == 1)
+	assert(GameState.current_day == mp_day_before)
+	GameState.end_turn() # Bob -> Cleo
+	assert(GameState.current_player_index == 2)
+	assert(GameState.current_day == mp_day_before)
+	GameState.end_turn() # Cleo was last -> shared day ticks, back to Alice
+	assert(GameState.current_player_index == 0)
+	assert(GameState.current_day == mp_day_before + 1)
+	print("multiplayer round completion OK")
+
+	# Morning/evening rule: a full-day leg (e.g. limassol -> venice, 2 half-
+	# days) may only be launched fresh in the morning. Having already spent
+	# half the day on a half-day hop (jaffa -> limassol) must block it in
+	# multiplayer -- this is exactly the scenario the user flagged.
+	GameState.new_multiplayer_game(21, ["Alice", "Bob"], "jaffa")
+	assert(GameState.get_travel_half_days("jaffa", "limassol") == 1)
+	assert(GameState.get_travel_half_days("limassol", "venice") == 2)
+	GameState.start_travel("limassol")
+	var mp_guard := 0
+	while not GameState.pending_encounter.is_empty() and mp_guard < 20:
+		GameState.resolve_pirate_encounter("pay")
+		mp_guard += 1
+	assert(GameState.current_port_id == "limassol")
+	assert(GameState.half_day_carry == 1)
+	GameState.start_travel("venice") # full-day leg mid-day -- must be rejected
+	assert(not GameState.is_traveling)
+	assert(GameState.current_port_id == "limassol")
+	# A half-day hop is still fine (1 + 1 = a full day, ends in the evening).
+	GameState.start_travel("istanbul")
+	var mp_guard2 := 0
+	while not GameState.pending_encounter.is_empty() and mp_guard2 < 20:
+		GameState.resolve_pirate_encounter("pay")
+		mp_guard2 += 1
+	assert(GameState.current_port_id == "istanbul")
+	assert(GameState.half_day_carry == 2)
+	print("multiplayer morning/evening rule OK")
+
+	# Same rule must NOT restrict classic single-player -- this mirrors the
+	# existing "half-day carry-over" test above (jaffa -> limassol -> istanbul
+	# chained within one continuous trip), which must keep working unchanged.
+	GameState.new_game(21, "jaffa")
+	GameState.start_travel("limassol")
+	var sp_guard := 0
+	while not GameState.pending_encounter.is_empty() and sp_guard < 20:
+		GameState.resolve_pirate_encounter("pay")
+		sp_guard += 1
+	assert(GameState.half_day_carry == 1)
+	GameState.start_travel("venice") # full-day leg mid-day -- allowed solo
+	assert(GameState.is_traveling or GameState.current_port_id == "venice")
+	print("single-player unaffected by morning/evening rule OK")
+
+	# A fresh full-day leg (half_day_carry == 0) is always allowed, even in
+	# multiplayer -- only launching one mid-day is blocked.
+	GameState.new_multiplayer_game(21, ["Alice", "Bob"], "jaffa")
+	assert(GameState.half_day_carry == 0)
+	GameState.start_travel("istanbul") # jaffa<->istanbul is a full-day route
+	assert(GameState.is_traveling or GameState.current_port_id == "istanbul")
+	print("multiplayer fresh full-day leg allowed OK")
+
+	# Standings: ranked by net worth, highest first.
+	GameState.new_multiplayer_game(21, ["Alice", "Bob", "Cleo"], "jaffa")
+	GameState.players[0].gold = 1000
+	GameState.players[1].gold = 5000
+	GameState.players[2].gold = 200
+	var standings: Array = GameState.get_standings()
+	assert(standings.size() == 3)
+	assert(standings[0]["player_name"] == "Bob")
+	assert(standings[1]["player_name"] == "Alice")
+	assert(standings[2]["player_name"] == "Cleo")
+	print("multiplayer standings OK")
+
+	# Save/load round trip for a multiplayer game.
+	GameState.new_multiplayer_game(21, ["Alice", "Bob", "Cleo"], "jaffa")
+	GameState.buy("silk", 3)
+	GameState.end_turn() # -> Bob's turn
+	GameState.gold = 4242
+	SaveManager.save_game()
+	GameState.new_game(10, "beirut") # clobber in-memory state before reloading
+	assert(SaveManager.load_game())
+	assert(GameState.player_count == 3)
+	assert(GameState.current_player_index == 1)
+	assert(GameState.players[0].cargo.get("silk", 0) == 3)
+	assert(GameState.players[1].gold == 4242)
+	assert(GameState.players[2].player_name == "Cleo")
+	SaveManager.delete_save()
+	print("multiplayer save/load OK")
+
+	# Backward compatibility: an old-format flat (pre-multiplayer) save file
+	# must still migrate cleanly into a single-player PlayerState.
+	var legacy_data := {
+		"game_length_days": 21,
+		"current_day": 5,
+		"gold": 777,
+		"current_port_id": "alexandria",
+		"cargo": {"spices": 9},
+		"ship_capacity": GameState.STARTING_CAPACITY,
+		"ship_speed_points": 1,
+		"ship_defense_points": 2,
+		"security_ships": 0,
+		"owned_upgrades": ["cargo1"],
+		"loan": 100.0,
+		"savings": 50.0,
+		"prices": {},
+		"capacity_offer_milestone": 0,
+		"millionaire_gift_claimed": false,
+		"mega_capacity_gift_milestone": 0,
+		"billionaire_gift_claimed": false,
+	}
+	var legacy_file := FileAccess.open(SaveManager.SAVE_PATH, FileAccess.WRITE)
+	legacy_file.store_string(JSON.stringify(legacy_data))
+	legacy_file.close()
+	assert(SaveManager.load_game())
+	assert(GameState.player_count == 1)
+	assert(GameState.current_player_index == 0)
+	assert(GameState.gold == 777)
+	assert(GameState.current_port_id == "alexandria")
+	assert(GameState.cargo.get("spices", 0) == 9)
+	assert(GameState.current_day == 5)
+	SaveManager.delete_save()
+	print("legacy single-player save migration OK")
+
 	print("=== ALL SMOKE TESTS PASSED ===")
 	quit()

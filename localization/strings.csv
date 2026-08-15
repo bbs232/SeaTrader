@@ -39,6 +39,7 @@ travel_half_day,חצי יום,half a day
 travel_one_day,יום אחד,1 day
 travel_confirm,הפלג,Set Sail
 must_rest_evening,הצוות מותש מהיום; יש לנוח לפני שיוצאים להפלגה נוספת.,The crew is worn out from today; rest before setting sail again.
+must_wait_full_day_leg,כבר הפלגתם חצי יום היום; הפלגה של יום שלם חייבת להתחיל בבוקר. אפשר עדיין להפליג ליעד בהפלגת חצי-יום נוספת או לנוח.,You've already sailed half the day; a full-day voyage must start fresh in the morning. You can still sail a half-day hop or rest.
 must_sell_overload,הספינה עמוסה מדי להפלגה; יש למכור מטען עד 150% מקיבולת המחסן לפני שיוצאים לדרך.,The ship is too loaded to sail; sell cargo down to 150% of hold capacity before setting sail.
 menu_rules,חוקי המשחק,Game Rules
 rules_title,חוקי המשחק,Game Rules
@@ -158,3 +159,17 @@ shipyard_amount_plain,+%s,+%s
 shipyard_amount_cargo,+%s (יהיה %s),+%s (will be %s)
 rest_notable_price_drop,בוקר חדש! מחירי ה%s צנחו ב%s.,A new morning! %s prices have crashed in %s.
 rest_notable_price_rise,בוקר חדש! מחירי ה%s זינקו ב%s.,A new morning! %s prices have spiked in %s.
+new_game_pick_players,כמה שחקנים?,How many players?
+players_count_1,1 (יחיד),1 (Solo)
+players_count_2,2 שחקנים,2 Players
+players_count_3,3 שחקנים,3 Players
+player_name_default,שחקן %d,Player %d
+new_game_start,התחל משחק,Start Game
+turn_banner,תורו של %s,%s's turn
+turn_pass_device,העבירו את המכשיר ל:,Pass the device to:
+turn_start_turn,התחל תור,Start Turn
+standings_button,טבלת מצב,Standings
+standings_title,טבלת מצב,Standings
+endgame_winner,"%s ניצח/ה!",%s wins!
+endgame_save_all_scores,שמור את כל התוצאות,Save All Scores
+endgame_all_scores_saved,התוצאות נשמרו!,Scores Saved!

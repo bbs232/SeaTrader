@@ -9,24 +9,16 @@ func has_save() -> bool:
 	return FileAccess.file_exists(SAVE_PATH)
 
 func save_game() -> void:
+	var player_dicts := []
+	for p in GameState.players:
+		player_dicts.append(p.to_dict())
 	var data := {
 		"game_length_days": GameState.game_length_days,
 		"current_day": GameState.current_day,
-		"gold": GameState.gold,
-		"current_port_id": GameState.current_port_id,
-		"cargo": GameState.cargo,
-		"ship_capacity": GameState.ship_capacity,
-		"ship_speed_points": GameState.ship_speed_points,
-		"ship_defense_points": GameState.ship_defense_points,
-		"security_ships": GameState.security_ships,
-		"owned_upgrades": GameState.owned_upgrades,
-		"loan": GameState.loan,
-		"savings": GameState.savings,
 		"prices": GameState.prices,
-		"capacity_offer_milestone": GameState.capacity_offer_milestone,
-		"millionaire_gift_claimed": GameState.millionaire_gift_claimed,
-		"mega_capacity_gift_milestone": GameState.mega_capacity_gift_milestone,
-		"billionaire_gift_claimed": GameState.billionaire_gift_claimed,
+		"player_count": GameState.player_count,
+		"current_player_index": GameState.current_player_index,
+		"players": player_dicts,
 	}
 	var file := FileAccess.open(SAVE_PATH, FileAccess.WRITE)
 	if file:
@@ -48,26 +40,42 @@ func load_game() -> bool:
 	GameState._load_definitions()
 	GameState.game_length_days = parsed.get("game_length_days", 21)
 	GameState.current_day = parsed.get("current_day", 1)
-	GameState.millionaire_gift_claimed = parsed.get("millionaire_gift_claimed", false)
-	GameState.billionaire_gift_claimed = parsed.get("billionaire_gift_claimed", false)
-	GameState.gold = parsed.get("gold", GameState.STARTING_GOLD)
-	GameState.current_port_id = parsed.get("current_port_id", "jaffa")
-	GameState.cargo = parsed.get("cargo", {})
-	GameState.ship_capacity = parsed.get("ship_capacity", GameState.STARTING_CAPACITY)
-	GameState.ship_speed_points = parsed.get("ship_speed_points", 0)
-	GameState.ship_defense_points = parsed.get("ship_defense_points", 0)
-	GameState.security_ships = parsed.get("security_ships", 0)
-	var owned: Array[String] = []
-	for u in parsed.get("owned_upgrades", []):
-		owned.append(String(u))
-	GameState.owned_upgrades = owned
-	GameState.loan = parsed.get("loan", 0.0)
-	GameState.savings = parsed.get("savings", 0.0)
 	GameState.prices = parsed.get("prices", {})
-	GameState.capacity_offer_milestone = parsed.get("capacity_offer_milestone", 0)
-	GameState.mega_capacity_gift_milestone = parsed.get("mega_capacity_gift_milestone", 0)
-	GameState.is_traveling = false
-	GameState.pending_encounter.clear()
+
+	if parsed.has("players"):
+		# Current (multiplayer-capable) save format.
+		var players: Array[PlayerState] = []
+		for pd in parsed.get("players", []):
+			players.append(PlayerState.from_dict(pd))
+		GameState.players = players
+		GameState.player_count = parsed.get("player_count", players.size())
+		GameState.current_player_index = parsed.get("current_player_index", 0)
+	else:
+		# Legacy single-player save (flat fields) -- migrate into a single
+		# PlayerState so old saves keep loading correctly.
+		var legacy := {
+			"gold": parsed.get("gold", GameState.STARTING_GOLD),
+			"current_port_id": parsed.get("current_port_id", "jaffa"),
+			"cargo": parsed.get("cargo", {}),
+			"ship_capacity": parsed.get("ship_capacity", GameState.STARTING_CAPACITY),
+			"ship_speed_points": parsed.get("ship_speed_points", 0),
+			"ship_defense_points": parsed.get("ship_defense_points", 0),
+			"security_ships": parsed.get("security_ships", 0),
+			"owned_upgrades": parsed.get("owned_upgrades", []),
+			"loan": parsed.get("loan", 0.0),
+			"savings": parsed.get("savings", 0.0),
+			"capacity_offer_milestone": parsed.get("capacity_offer_milestone", 0),
+			"millionaire_gift_claimed": parsed.get("millionaire_gift_claimed", false),
+			"mega_capacity_gift_milestone": parsed.get("mega_capacity_gift_milestone", 0),
+			"billionaire_gift_claimed": parsed.get("billionaire_gift_claimed", false),
+		}
+		GameState.players = [PlayerState.from_dict(legacy)]
+		GameState.player_count = 1
+		GameState.current_player_index = 0
+
+	for p in GameState.players:
+		p.is_traveling = false
+		p.pending_encounter = {}
 	return true
 
 func delete_save() -> void:

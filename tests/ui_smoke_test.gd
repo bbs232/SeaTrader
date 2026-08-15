@@ -19,6 +19,8 @@ func _initialize() -> void:
 	GameState.current_day = 2 # force past game_length so EndGame reads a finished run
 	_test_scene("res://scenes/EndGame.tscn")
 
+	await _test_multiplayer_screens()
+
 	print("=== ALL UI SMOKE TESTS PASSED ===")
 	quit()
 
@@ -154,6 +156,102 @@ func _test_game_overlays() -> void:
 
 	instance.queue_free()
 	print("instantiated OK: res://scenes/Game.tscn (overlays)")
+
+## Exercises the multiplayer-only screens added on top of the single-player
+## flow: MainMenu's player-count/name-entry setup steps, Game.gd's turn
+## banner + pass-device hand-off + standings panel, and EndGame's
+## multi-player leaderboard with its "save all scores" button.
+func _test_multiplayer_screens() -> void:
+	var menu_packed: PackedScene = load("res://scenes/MainMenu.tscn")
+	var menu_instance := menu_packed.instantiate()
+	root.add_child(menu_instance)
+	await process_frame
+
+	var setup_vbox := VBoxContainer.new()
+	menu_instance.call("_show_player_setup", setup_vbox, 21)
+	assert(setup_vbox.get_child_count() > 0)
+	menu_instance.call("_show_player_names", setup_vbox, 21, 3)
+	assert(setup_vbox.get_child_count() > 0)
+	menu_instance.queue_free()
+	print("player setup screens OK")
+
+	GameState.new_multiplayer_game(21, ["Alice", "Bob", "Cleo"], "jaffa")
+	var game_packed: PackedScene = load("res://scenes/Game.tscn")
+	var game_instance := game_packed.instantiate()
+	root.add_child(game_instance)
+	await process_frame
+
+	# rest_at_port()/end_turn() advances current_player_index synchronously;
+	# the fade animation itself never completes headlessly (no real time
+	# passes here), same as the solo "rest animation start" test above.
+	game_instance.is_animating_travel = false
+	game_instance.call("_on_rest_pressed") # Alice -> Bob
+	assert(GameState.current_player_index == 1)
+	assert(game_instance.is_resting == true)
+	print("turn advance on rest OK")
+
+	game_instance.call("_show_pass_device_screen")
+	assert(game_instance.overlay_stack.size() == 1)
+	game_instance.call("_close_overlay")
+	print("pass-device screen OK")
+
+	game_instance.call("_open_standings_panel")
+	assert(game_instance.overlay_stack.size() == 1)
+	game_instance.call("_close_overlay")
+	print("standings panel OK")
+
+	# The multiplayer "no full-day leg after half a day" rule (see GameState.
+	# start_travel's guard) must be visible on the map, not just silently
+	# enforced: the destination should be dimmed and tapping it should show
+	# an explanatory message instead of silently doing nothing.
+	GameState.start_travel("limassol") # half-day hop -- now Bob's turn, half_day_carry becomes 1
+	var block_guard := 0
+	while not GameState.pending_encounter.is_empty() and block_guard < 20:
+		GameState.resolve_pirate_encounter("pay")
+		block_guard += 1
+	assert(GameState.half_day_carry == 1)
+	# game_instance is a live scene wired to GameState's signals, so this trip
+	# may have opened a pirate-encounter dialog and always opens an arrival
+	# message (see _on_pirate_encounter_started / _on_arrived_at_port) --
+	# drain those before checking the blocked-marker behavior below.
+	while game_instance.overlay_stack.size() > 0:
+		game_instance.call("_close_overlay")
+	# Both the arrival's ship-glide tween (_animate_ship_to) and the earlier
+	# rest's fade tween never actually finish headlessly (no real time
+	# passes), same as the equivalent standalone tests above -- reset both
+	# flags so _on_port_marker_pressed below doesn't bail out early on a
+	# stuck is_animating_travel/is_resting guard.
+	game_instance.is_animating_travel = false
+	game_instance.is_resting = false
+	assert(game_instance.call("_is_full_day_leg_blocked", "venice") == true)
+	assert(game_instance.call("_is_full_day_leg_blocked", "istanbul") == false) # half-day hop, still allowed
+	assert(game_instance.overlay_stack.size() == 0)
+	game_instance.call("_on_port_marker_pressed", "venice")
+	assert(GameState.current_port_id == "limassol") # blocked -- did not silently start sailing
+	assert(not GameState.is_traveling)
+	assert(game_instance.overlay_stack.size() == 1) # explanatory message shown instead
+	game_instance.call("_close_overlay")
+	print("full-day leg blocked marker + message OK")
+
+	game_instance.queue_free()
+
+	GameState.new_multiplayer_game(1, ["Alice", "Bob"], "jaffa")
+	GameState.current_day = 2 # force past game_length so EndGame reads a finished run
+	var endgame_packed: PackedScene = load("res://scenes/EndGame.tscn")
+	var endgame_instance := endgame_packed.instantiate()
+	root.add_child(endgame_instance)
+	await process_frame
+
+	assert(endgame_instance.save_button != null)
+	var scores_before: int = SaveManager.get_highscores().size()
+	endgame_instance.save_button.pressed.emit()
+	assert(endgame_instance.saved)
+	# The board persists across runs (real file on disk) and caps at
+	# MAX_HIGHSCORES, so repeated local test runs can already be at the cap --
+	# assert against that cap rather than assuming unbounded growth by 2.
+	assert(SaveManager.get_highscores().size() == mini(scores_before + 2, SaveManager.MAX_HIGHSCORES))
+	endgame_instance.queue_free()
+	print("multiplayer endgame leaderboard + save-all OK")
 
 func _test_scene(path: String) -> void:
 	var packed: PackedScene = load(path)

@@ -102,15 +102,66 @@ func _on_new_game_pressed() -> void:
 	for entry in lengths:
 		var b := UIUtil.make_button(entry[0])
 		var days: int = entry[1]
-		b.pressed.connect(func(): _start_new_game(days))
+		b.pressed.connect(func(): _show_player_setup(vbox, days))
 		vbox.add_child(b)
 
 	var btn_cancel := UIUtil.make_button(tr("cancel"))
 	btn_cancel.pressed.connect(func(): _length_dialog_layer.queue_free())
 	vbox.add_child(btn_cancel)
 
-func _start_new_game(days: int) -> void:
-	GameState.new_game(days, "jaffa")
+## Step 2 of "New Game": how many players (1-3, hotseat) share this run.
+## Rebuilds the same dialog's vbox in place rather than opening a second
+## overlay, so "cancel" from here still just tears down one layer.
+func _show_player_setup(vbox: VBoxContainer, days: int) -> void:
+	for c in vbox.get_children():
+		c.queue_free()
+
+	vbox.add_child(UIUtil.make_title(tr("new_game_pick_players"), 26))
+
+	for count in [1, 2, 3]:
+		var b := UIUtil.make_button(tr("players_count_%d" % count))
+		b.pressed.connect(func(): _show_player_names(vbox, days, count))
+		vbox.add_child(b)
+
+	var btn_cancel := UIUtil.make_button(tr("cancel"))
+	btn_cancel.pressed.connect(func(): _length_dialog_layer.queue_free())
+	vbox.add_child(btn_cancel)
+
+## Step 3 (only when count > 1): a name field per player, hotseat-style --
+## solo play skips straight to the game with no name prompt, same as before.
+func _show_player_names(vbox: VBoxContainer, days: int, count: int) -> void:
+	if count <= 1:
+		_start_new_game(days, [""])
+		return
+
+	for c in vbox.get_children():
+		c.queue_free()
+
+	vbox.add_child(UIUtil.make_title(tr("new_game_pick_players"), 26))
+
+	var name_edits: Array[LineEdit] = []
+	for i in range(count):
+		var edit := LineEdit.new()
+		edit.placeholder_text = tr("player_name_default") % (i + 1)
+		edit.custom_minimum_size = Vector2(0, 44)
+		vbox.add_child(edit)
+		name_edits.append(edit)
+
+	var btn_start := UIUtil.make_button(tr("new_game_start"))
+	btn_start.pressed.connect(func():
+		var names: Array = []
+		for edit in name_edits:
+			names.append(edit.text.strip_edges())
+		_start_new_game(days, names)
+	)
+	vbox.add_child(btn_start)
+
+	var btn_cancel := UIUtil.make_button(tr("cancel"))
+	btn_cancel.pressed.connect(func(): _length_dialog_layer.queue_free())
+	vbox.add_child(btn_cancel)
+
+func _start_new_game(days: int, player_names: Array = [""]) -> void:
+	GameState.new_multiplayer_game(days, player_names, "jaffa")
 	get_tree().change_scene_to_file("res://scenes/Game.tscn")
 
 func _on_continue_pressed() -> void:

@@ -25,6 +25,16 @@ func _build_ui() -> void:
 	vbox.add_theme_constant_override("separation", 12)
 	panel.add_child(vbox)
 
+	if GameState.is_multiplayer():
+		_build_multiplayer_results(vbox)
+	else:
+		_build_solo_results(vbox)
+
+	var btn_menu := UIUtil.make_button(tr("endgame_to_menu"))
+	btn_menu.pressed.connect(func(): get_tree().change_scene_to_file("res://scenes/MainMenu.tscn"))
+	vbox.add_child(btn_menu)
+
+func _build_solo_results(vbox: VBoxContainer) -> void:
 	vbox.add_child(UIUtil.make_title(tr("endgame_title"), 32))
 
 	var net_worth := GameState.get_net_worth()
@@ -56,6 +66,53 @@ func _build_ui() -> void:
 	)
 	vbox.add_child(save_button)
 
-	var btn_menu := UIUtil.make_button(tr("endgame_to_menu"))
-	btn_menu.pressed.connect(func(): get_tree().change_scene_to_file("res://scenes/MainMenu.tscn"))
-	vbox.add_child(btn_menu)
+## Names were already collected at game setup (see MainMenu._show_player_names),
+## so unlike solo play there's nothing left to type here -- just the final
+## leaderboard, ranked by net worth, and one button to submit every player's
+## result to the shared local high-score board at once.
+func _build_multiplayer_results(vbox: VBoxContainer) -> void:
+	vbox.add_child(UIUtil.make_title(tr("endgame_title"), 32))
+
+	var standings: Array = GameState.get_standings()
+	if not standings.is_empty():
+		var winner_name := _player_label(standings[0])
+		vbox.add_child(UIUtil.make_label(tr("endgame_winner") % winner_name, 22, Color("#D9A441")))
+
+	var grid := GridContainer.new()
+	grid.columns = 3
+	grid.add_theme_constant_override("h_separation", 18)
+	grid.add_theme_constant_override("v_separation", 10)
+	vbox.add_child(grid)
+
+	grid.add_child(UIUtil.make_label("", 14))
+	grid.add_child(UIUtil.make_label(tr("highscores_col_name"), 14, Color("#9FB6BE")))
+	var header_networth := UIUtil.make_label(tr("hud_networth"), 14, Color("#9FB6BE"))
+	header_networth.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
+	grid.add_child(header_networth)
+
+	var rank := 1
+	for entry in standings:
+		var rank_label := UIUtil.make_label("★" if rank <= 3 else "%d." % rank, 18)
+		rank_label.custom_minimum_size = Vector2(28, 0)
+		grid.add_child(rank_label)
+		grid.add_child(UIUtil.make_label(_player_label(entry), 17))
+		var worth_label := UIUtil.make_label(UIUtil.format_gold(entry["net_worth"]), 17, Color("#D9A441"))
+		worth_label.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
+		grid.add_child(worth_label)
+		rank += 1
+
+	save_button = UIUtil.make_button(tr("endgame_save_all_scores"))
+	save_button.pressed.connect(func():
+		for entry in standings:
+			SaveManager.add_highscore(_player_label(entry), entry["net_worth"])
+		saved = true
+		save_button.disabled = true
+		save_button.text = tr("endgame_all_scores_saved")
+	)
+	vbox.add_child(save_button)
+
+func _player_label(standings_entry: Dictionary) -> String:
+	var raw_name := String(standings_entry.get("player_name", "")).strip_edges()
+	if raw_name != "":
+		return raw_name
+	return tr("player_name_default") % (int(standings_entry.get("index", 0)) + 1)

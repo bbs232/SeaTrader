@@ -199,7 +199,11 @@ func _build_dock() -> void:
 func _refresh_all() -> void:
 	var port := GameState.get_port(GameState.current_port_id)
 	var port_name := tr(port.name_key) if port else "?"
-	hud_label.text = "%s %d/%d (%s)   |   %s: %s   |   %s: %s/%s   |   %s: %s   |   %s" % [
+	var turn_prefix := ""
+	if GameState.is_multiplayer():
+		turn_prefix = (tr("turn_banner") % _active_player_label()) + "   |   "
+	hud_label.text = "%s%s %d/%d (%s)   |   %s: %s   |   %s: %s/%s   |   %s: %s   |   %s" % [
+		turn_prefix,
 		tr("hud_day"), GameState.current_day, GameState.game_length_days, tr(_time_of_day_key()),
 		tr("hud_gold"), UIUtil.format_gold(GameState.gold),
 		tr("hud_cargo"), UIUtil.format_gold(GameState.get_cargo_used()), UIUtil.format_gold(GameState.ship_capacity),
@@ -222,6 +226,15 @@ func _refresh_all() -> void:
 ## - Once settled at a port, half_day_carry otherwise tells us whether a
 ##   half-day-length hop already happened today without ticking the day over
 ##   (1, Noon) or the day just started fresh (0, Morning).
+## Falls back to a generic "Player N" label when the player left the name
+## field blank at setup time (see MainMenu._show_player_names).
+func _active_player_label(index: int = -1) -> String:
+	var i: int = GameState.current_player_index if index < 0 else index
+	var p: PlayerState = GameState.players[i]
+	if p.player_name.strip_edges() != "":
+		return p.player_name
+	return tr("player_name_default") % (i + 1)
+
 func _time_of_day_key() -> String:
 	if is_animating_travel or is_resting or GameState.half_day_carry >= 2:
 		return "hud_time_evening"
@@ -238,14 +251,25 @@ func _time_of_day_tint() -> Color:
 		_:
 			return Color(1.0, 0.97, 0.9)
 
+## Multiplayer-only: a full-day leg can't be launched once half a day has
+## already been spent this turn (see GameState.start_travel's own guard,
+## which silently no-ops on a blocked port -- this is what makes that same
+## rule visible on the map, both as a dim marker and as a tap explanation).
+func _is_full_day_leg_blocked(port_id: String) -> bool:
+	return GameState.is_multiplayer() and GameState.half_day_carry != 0 \
+		and GameState.get_travel_half_days(GameState.current_port_id, port_id) == 2
+
 ## Dims every other port once the day's travel budget is spent
-## (half_day_carry == 2) -- sailing again has to wait for Rest.
+## (half_day_carry == 2) -- sailing again has to wait for Rest -- and, in
+## multiplayer, also dims any full-day-leg destination once half the day is
+## already spent (half_day_carry == 1), since launching one now would be
+## blocked (see _is_full_day_leg_blocked).
 func _update_port_marker_states() -> void:
 	for port_id in port_buttons.keys():
 		var btn: TextureButton = port_buttons[port_id]
 		if port_id == GameState.current_port_id:
 			btn.modulate = Color(1, 1, 1, 1)
-		elif GameState.half_day_carry >= 2:
+		elif GameState.half_day_carry >= 2 or _is_full_day_leg_blocked(port_id):
 			btn.modulate = Color(1, 1, 1, 0.4)
 		else:
 			btn.modulate = Color(1, 1, 1, 1)
@@ -257,6 +281,9 @@ func _on_port_marker_pressed(port_id: String) -> void:
 		return
 	if GameState.half_day_carry >= 2:
 		_show_message(tr("must_rest_evening"))
+		return
+	if _is_full_day_leg_blocked(port_id):
+		_show_message(tr("must_wait_full_day_leg"))
 		return
 	if GameState.get_cargo_used() > GameState.get_overload_capacity():
 		_show_message(tr("must_sell_overload"))
@@ -317,7 +344,30 @@ func _play_rest_animation(rest_result: Dictionary = {}) -> void:
 			lines.append(_format_log_entry(warehouse))
 		if not lines.is_empty():
 			_show_message("\n".join(lines))
+		if GameState.is_multiplayer() and GameState.current_day <= GameState.game_length_days:
+			_show_pass_device_screen()
 	)
+
+## --- Hotseat turn hand-off ---
+
+## end_turn() (called via rest_at_port above) already moved
+## current_player_index on to whoever plays next -- this just blocks the
+## screen behind a "pass the device" prompt naming them before their own
+## trade/travel options become visible, so the outgoing player's info isn't
+## left on screen for the incoming one to see by accident.
+func _show_pass_device_screen() -> void:
+	var panel := _open_overlay()
+	var vbox := VBoxContainer.new()
+	vbox.custom_minimum_size = Vector2(380, 0)
+	vbox.add_theme_constant_override("separation", 14)
+	panel.add_child(vbox)
+
+	vbox.add_child(UIUtil.make_label(tr("turn_pass_device"), 18))
+	vbox.add_child(UIUtil.make_title(_active_player_label(), 30))
+
+	var btn_start := UIUtil.make_button(tr("turn_start_turn"))
+	btn_start.pressed.connect(_close_overlay)
+	vbox.add_child(btn_start)
 
 ## Formats the "morning news" line for a notable overnight price swing found
 ## by GameState.rest_at_port (see _find_notable_price_change).
@@ -1070,6 +1120,11 @@ func _on_menu_pressed() -> void:
 	btn_resume.pressed.connect(_close_overlay)
 	vbox.add_child(btn_resume)
 
+	if GameState.is_multiplayer():
+		var btn_standings := UIUtil.make_button(tr("standings_button"))
+		btn_standings.pressed.connect(_open_standings_panel)
+		vbox.add_child(btn_standings)
+
 	var btn_rules := UIUtil.make_button(tr("menu_rules"))
 	btn_rules.pressed.connect(_open_rules_panel)
 	vbox.add_child(btn_rules)
@@ -1084,11 +1139,60 @@ func _on_menu_pressed() -> void:
 	var btn_restart := UIUtil.make_button(tr("menu_restart"))
 	btn_restart.pressed.connect(func():
 		_show_confirm(tr("confirm_restart"), func():
-			GameState.new_game(GameState.game_length_days, "jaffa")
+			var names: Array = []
+			for p in GameState.players:
+				names.append(p.player_name)
+			GameState.new_multiplayer_game(GameState.game_length_days, names, "jaffa")
 			get_tree().reload_current_scene()
 		)
 	)
 	vbox.add_child(btn_restart)
+
+## --- Standings (multiplayer only) ---
+
+func _open_standings_panel() -> void:
+	var panel := _open_overlay()
+	var vbox := VBoxContainer.new()
+	vbox.custom_minimum_size = Vector2(420, 0)
+	vbox.add_theme_constant_override("separation", 10)
+	panel.add_child(vbox)
+
+	vbox.add_child(UIUtil.make_title(tr("standings_title"), 26))
+
+	var grid := GridContainer.new()
+	grid.columns = 3
+	grid.add_theme_constant_override("h_separation", 18)
+	grid.add_theme_constant_override("v_separation", 10)
+	vbox.add_child(grid)
+
+	grid.add_child(UIUtil.make_label("", 14))
+	var header_name := UIUtil.make_label(tr("highscores_col_name"), 14, Color("#9FB6BE"))
+	grid.add_child(header_name)
+	var header_networth := UIUtil.make_label(tr("hud_networth"), 14, Color("#9FB6BE"))
+	header_networth.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
+	grid.add_child(header_networth)
+
+	var standings: Array = GameState.get_standings()
+	var rank := 1
+	for entry in standings:
+		var rank_label := UIUtil.make_label("%d." % rank, 18)
+		rank_label.custom_minimum_size = Vector2(28, 0)
+		grid.add_child(rank_label)
+
+		var idx: int = entry["index"]
+		var is_active := idx == GameState.current_player_index
+		var name_color := Color("#D9A441") if is_active else Color("#FFF6E3")
+		grid.add_child(UIUtil.make_label(_active_player_label(idx), 17, name_color))
+
+		var worth_label := UIUtil.make_label(UIUtil.format_gold(entry["net_worth"]), 17, name_color)
+		worth_label.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
+		grid.add_child(worth_label)
+
+		rank += 1
+
+	var btn_close := UIUtil.make_button(tr("close"))
+	btn_close.pressed.connect(_close_overlay)
+	vbox.add_child(btn_close)
 
 ## --- Pirate encounter ---
 

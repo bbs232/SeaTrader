@@ -11,7 +11,7 @@ signal mega_capacity_gift_granted(bonus: int)
 signal billionaire_gift_granted(security_ships_granted: int)
 
 ## Bumped by one on every gameplay/UI update shipped, shown in the main menu footer.
-const GAME_VERSION := "3.9"
+const GAME_VERSION := "4.1"
 
 const STARTING_GOLD := 500
 const STARTING_CAPACITY := 85
@@ -59,60 +59,110 @@ var events: Array[EventDef] = []
 
 var game_length_days: int = 21
 var current_day: int = 1
-var gold: int = STARTING_GOLD:
+var prices: Dictionary = {} # port_id -> { good_id -> int price }
+
+## One PlayerState per participant (1 for the classic single-player game, up
+## to 3 for hotseat multiplayer -- see new_multiplayer_game). Everything that
+## used to be a flat per-game field (gold, cargo, ship, travel state...) now
+## lives on PlayerState; the properties below proxy to
+## players[current_player_index] so the rest of this file -- and all of
+## Game.gd's UI code -- keeps reading e.g. GameState.gold unchanged and
+## always sees whoever's turn it currently is.
+var players: Array[PlayerState] = []
+var player_count: int = 1
+var current_player_index: int = 0
+
+var gold: int:
+	get: return players[current_player_index].gold
 	set(value):
-		gold = value
+		players[current_player_index].gold = value
 		_check_millionaire_gift()
 		_check_capacity_offer()
 		_check_mega_capacity_gift()
 		_check_billionaire_gift()
-var current_port_id: String = ""
-var cargo: Dictionary = {} # good_id -> int quantity
-var ship_capacity: int = STARTING_CAPACITY
-var ship_speed_points: int = STARTING_SPEED_POINTS
-var ship_defense_points: int = STARTING_DEFENSE_POINTS
-var security_ships: int = 0
-var owned_upgrades: Array[String] = []
-var loan: float = 0.0
-var savings: float = 0.0
+var current_port_id: String:
+	get: return players[current_player_index].current_port_id
+	set(value): players[current_player_index].current_port_id = value
+var cargo: Dictionary: # good_id -> int quantity
+	get: return players[current_player_index].cargo
+	set(value): players[current_player_index].cargo = value
+var ship_capacity: int:
+	get: return players[current_player_index].ship_capacity
+	set(value): players[current_player_index].ship_capacity = value
+var ship_speed_points: int:
+	get: return players[current_player_index].ship_speed_points
+	set(value): players[current_player_index].ship_speed_points = value
+var ship_defense_points: int:
+	get: return players[current_player_index].ship_defense_points
+	set(value): players[current_player_index].ship_defense_points = value
+var security_ships: int:
+	get: return players[current_player_index].security_ships
+	set(value): players[current_player_index].security_ships = value
+var owned_upgrades: Array[String]:
+	get: return players[current_player_index].owned_upgrades
+	set(value): players[current_player_index].owned_upgrades = value
+var loan: float:
+	get: return players[current_player_index].loan
+	set(value): players[current_player_index].loan = value
+var savings: float:
+	get: return players[current_player_index].savings
+	set(value): players[current_player_index].savings = value
 ## Highest CAPACITY_OFFER_GOLD_STEP multiple already surfaced as a special
 ## offer (see _check_capacity_offer), so each milestone only prompts once.
-var capacity_offer_milestone: int = 0
+var capacity_offer_milestone: int:
+	get: return players[current_player_index].capacity_offer_milestone
+	set(value): players[current_player_index].capacity_offer_milestone = value
 ## How many CAPACITY_OFFER_GOLD_STEP milestones the currently-pending offer
 ## bundles together (usually 1; more if a single trade jumped gold across
 ## several steps at once -- see _check_capacity_offer). Not persisted across
 ## save/load: it only matters between the offer being surfaced and resolved,
 ## same as pending_encounter.
-var capacity_offer_pending_steps: int = 1
+var capacity_offer_pending_steps: int:
+	get: return players[current_player_index].capacity_offer_pending_steps
+	set(value): players[current_player_index].capacity_offer_pending_steps = value
 ## Whether the one-time MILLIONAIRE_GIFT_GOLD_THRESHOLD warehouse gift has
 ## already been granted (see _check_millionaire_gift), so it only fires once.
-var millionaire_gift_claimed: bool = false
+var millionaire_gift_claimed: bool:
+	get: return players[current_player_index].millionaire_gift_claimed
+	set(value): players[current_player_index].millionaire_gift_claimed = value
 ## Highest MEGA_CAPACITY_GIFT_GOLD_STEP multiple already granted (see
 ## _check_mega_capacity_gift) -- recurring like capacity_offer_milestone,
 ## not a one-time flag like millionaire_gift_claimed.
-var mega_capacity_gift_milestone: int = 0
+var mega_capacity_gift_milestone: int:
+	get: return players[current_player_index].mega_capacity_gift_milestone
+	set(value): players[current_player_index].mega_capacity_gift_milestone = value
 ## Whether the one-time BILLIONAIRE_GIFT_GOLD_THRESHOLD security-ship gift has
 ## already been granted (see _check_billionaire_gift), so it only fires once --
 ## same one-shot pattern as millionaire_gift_claimed.
-var billionaire_gift_claimed: bool = false
+var billionaire_gift_claimed: bool:
+	get: return players[current_player_index].billionaire_gift_claimed
+	set(value): players[current_player_index].billionaire_gift_claimed = value
 
-var prices: Dictionary = {} # port_id -> { good_id -> int price }
-
-var is_traveling: bool = false
-var travel_destination_id: String = ""
-var travel_half_days_remaining: int = 0
+var is_traveling: bool:
+	get: return players[current_player_index].is_traveling
+	set(value): players[current_player_index].is_traveling = value
+var travel_destination_id: String:
+	get: return players[current_player_index].travel_destination_id
+	set(value): players[current_player_index].travel_destination_id = value
+var travel_half_days_remaining: int:
+	get: return players[current_player_index].travel_half_days_remaining
+	set(value): players[current_player_index].travel_half_days_remaining = value
 ## Whether this leg has already had its one shot at a travel event (see
 ## _advance_travel) -- every leg gets exactly one roll, whether it's a lone
 ## half-day hop or a full multi-half-day route, no matter how many
 ## _advance_travel calls it takes to get there (a pirate encounter can pause
 ## and resume the same leg across several calls). Reset in start_travel.
-var travel_event_rolled_this_leg: bool = false
+var travel_event_rolled_this_leg: bool:
+	get: return players[current_player_index].travel_event_rolled_this_leg
+	set(value): players[current_player_index].travel_event_rolled_this_leg = value
 ## This leg's own duration in half-days (set once in start_travel, unlike
 ## travel_half_days_remaining which counts down). Used only to scale down the
 ## event roll's chance for a half-day-only leg (see HALF_DAY_EVENT_SCALE and
 ## _roll_travel_event) -- it's half the exposure of a full travel day, so it
 ## should be correspondingly less likely to turn up an event.
-var travel_leg_half_days: int = 0
+var travel_leg_half_days: int:
+	get: return players[current_player_index].travel_leg_half_days
+	set(value): players[current_player_index].travel_leg_half_days = value
 ## Half-day legs don't trigger a full day-tick (price update/interest/event
 ## roll) on their own; this banks the odd half-day so two short hops in a row
 ## still add up to a real day instead of time silently vanishing. Reaching 2
@@ -123,13 +173,24 @@ var travel_leg_half_days: int = 0
 ## half-day hops -- the day-tick is left pending: half_day_carry stays at 2
 ## ("evening", see Game._time_of_day_key) so the player can still trade at
 ## the new port today. The day only turns over once they rest (see
-## rest_at_port), and start_travel refuses to set sail again until then.
-var half_day_carry: int = 0
-var travel_log: Array = []
-var pending_encounter: Dictionary = {}
+## rest_at_port/end_turn), and start_travel refuses to set sail again until then.
+var half_day_carry: int:
+	get: return players[current_player_index].half_day_carry
+	set(value): players[current_player_index].half_day_carry = value
+var travel_log: Array:
+	get: return players[current_player_index].travel_log
+	set(value): players[current_player_index].travel_log = value
+var pending_encounter: Dictionary:
+	get: return players[current_player_index].pending_encounter
+	set(value): players[current_player_index].pending_encounter = value
 
 func _ready() -> void:
 	_load_definitions()
+	# Safety net: anything that reads e.g. GameState.gold before a game has
+	# actually started (new_game/new_multiplayer_game/load_game) would index
+	# into an empty players array otherwise.
+	if players.is_empty():
+		players.append(_make_player("", "jaffa"))
 
 func _load_definitions() -> void:
 	goods.clear()
@@ -196,34 +257,55 @@ func get_upgrade(upgrade_id: String) -> ShipUpgrade:
 			return u
 	return null
 
-## Starts a brand new game. game_length picks how many in-game days the trading run lasts.
+## Starts a brand new classic single-player game. game_length picks how many
+## in-game days the trading run lasts.
 func new_game(game_length: int = 21, start_port_id: String = "jaffa") -> void:
+	new_multiplayer_game(game_length, [""], start_port_id)
+
+## Starts a hotseat game for 1-3 players sharing one calendar and one market
+## (see the turn-engine notes on half_day_carry above, and end_turn below).
+## player_names.size() determines player_count; an empty name is fine -- the
+## UI supplies a default display label ("Player 1", etc.) for those.
+func new_multiplayer_game(game_length: int, player_names: Array, start_port_id: String = "jaffa") -> void:
 	_load_definitions()
 	game_length_days = game_length
 	current_day = 1
-	gold = STARTING_GOLD
-	current_port_id = start_port_id
-	cargo.clear()
-	ship_capacity = STARTING_CAPACITY
-	ship_speed_points = STARTING_SPEED_POINTS
-	ship_defense_points = STARTING_DEFENSE_POINTS
-	security_ships = 0
-	owned_upgrades.clear()
-	loan = 0.0
-	savings = 0.0
-	capacity_offer_milestone = 0
-	millionaire_gift_claimed = false
-	mega_capacity_gift_milestone = 0
-	billionaire_gift_claimed = false
-	is_traveling = false
-	travel_destination_id = ""
-	travel_half_days_remaining = 0
-	travel_leg_half_days = 0
-	travel_event_rolled_this_leg = false
-	half_day_carry = 0
-	travel_log.clear()
-	pending_encounter.clear()
+	players.clear()
+	for n in player_names:
+		players.append(_make_player(String(n), start_port_id))
+	player_count = players.size()
+	current_player_index = 0
 	_init_prices()
+
+func _make_player(player_name: String, start_port_id: String) -> PlayerState:
+	var p := PlayerState.new()
+	p.player_name = player_name
+	p.gold = STARTING_GOLD
+	p.current_port_id = start_port_id
+	p.cargo = {}
+	p.ship_capacity = STARTING_CAPACITY
+	p.ship_speed_points = STARTING_SPEED_POINTS
+	p.ship_defense_points = STARTING_DEFENSE_POINTS
+	p.security_ships = 0
+	p.owned_upgrades = []
+	p.loan = 0.0
+	p.savings = 0.0
+	p.capacity_offer_milestone = 0
+	p.millionaire_gift_claimed = false
+	p.mega_capacity_gift_milestone = 0
+	p.billionaire_gift_claimed = false
+	p.is_traveling = false
+	p.travel_destination_id = ""
+	p.travel_half_days_remaining = 0
+	p.travel_leg_half_days = 0
+	p.travel_event_rolled_this_leg = false
+	p.half_day_carry = 0
+	p.travel_log = []
+	p.pending_encounter = {}
+	return p
+
+func is_multiplayer() -> bool:
+	return player_count > 1
 
 func _init_prices() -> void:
 	prices.clear()
@@ -421,6 +503,33 @@ func hire_security_ship() -> bool:
 func get_net_worth() -> int:
 	return int(gold + get_cargo_value_at_current_port() + savings - loan)
 
+## Standings across every player, ranked by net worth (highest first) -- for
+## the in-game standings panel and the multiplayer end-game leaderboard.
+## Each entry: {index, player_name, net_worth, gold, cargo_value}.
+func get_standings() -> Array:
+	var result := []
+	for i in range(players.size()):
+		var p: PlayerState = players[i]
+		result.append({
+			"index": i,
+			"player_name": p.player_name,
+			"net_worth": _net_worth_for(p),
+			"gold": p.gold,
+			"cargo_value": _cargo_value_for(p),
+		})
+	result.sort_custom(func(a, b): return a["net_worth"] > b["net_worth"])
+	return result
+
+func _cargo_value_for(p: PlayerState) -> int:
+	var total := 0
+	var port_prices: Dictionary = prices.get(p.current_port_id, {})
+	for good_id in p.cargo.keys():
+		total += int(port_prices.get(good_id, 0)) * int(p.cargo[good_id])
+	return total
+
+func _net_worth_for(p: PlayerState) -> int:
+	return int(p.gold + _cargo_value_for(p) + p.savings - p.loan)
+
 func bank_deposit(amount: int) -> bool:
 	if amount <= 0 or amount > gold:
 		return false
@@ -486,6 +595,13 @@ func start_travel(destination_id: String) -> void:
 		return # half_day_carry == 2 means it's already evening -- rest first
 	if get_cargo_used() > get_overload_capacity():
 		return # too loaded to put to sea -- sell down to at most 150% of nominal capacity first
+	# In multiplayer, one round == one shared calendar day, so a player's turn
+	# can never spend more than a full day (2 half-days) at sea. A full-day leg
+	# must therefore be launched fresh in the morning (half_day_carry == 0) --
+	# starting one after already spending half the day (e.g. a Limassol hop)
+	# would push this player's turn past the round's shared day boundary.
+	if player_count > 1 and half_day_carry != 0 and get_travel_half_days(current_port_id, destination_id) == 2:
+		return
 	is_traveling = true
 	travel_destination_id = destination_id
 	travel_half_days_remaining = get_travel_half_days(current_port_id, destination_id)
@@ -536,17 +652,34 @@ func _advance_travel() -> void:
 ## _find_notable_price_change, or {} if nothing crossed the threshold) and,
 ## if a warehouse mishap struck, "warehouse" (see _roll_warehouse_event) --
 ## so the UI can flash a "morning news" message about either.
-func rest_at_port() -> Dictionary:
+## Ends the active player's turn. In single-player (player_count == 1) this
+## still ticks the shared day immediately on every call, exactly as before --
+## there's only ever one player, so their turn is always the round's last.
+## In multiplayer, only the round's last player actually advances the shared
+## day (prices/interest/current_day); everyone else just closes their own
+## half-day bookkeeping (and rolls their own warehouse-mishap check) and
+## hands the device to the next player -- see the turn-engine notes on
+## half_day_carry above.
+func end_turn() -> Dictionary:
 	if is_traveling:
 		return {}
-	var before := _snapshot_prices()
 	half_day_carry = 0
-	_advance_day()
-	var result := {"price_change": _find_notable_price_change(before)}
+	var is_last_in_round := current_player_index >= player_count - 1
+	var result := {}
+	if is_last_in_round:
+		var before := _snapshot_prices()
+		_advance_day()
+		result["price_change"] = _find_notable_price_change(before)
 	var warehouse := _roll_warehouse_event()
 	if not warehouse.is_empty():
 		result["warehouse"] = warehouse
+	current_player_index = 0 if is_last_in_round else current_player_index + 1
 	return result
+
+## Alias kept for the existing call sites (Game.gd, smoke tests) -- "rest"
+## and "end this player's turn" are the same action, see end_turn() above.
+func rest_at_port() -> Dictionary:
+	return end_turn()
 
 ## Small nightly risk while docked with cargo aboard: a warehouse fire or a
 ## theft eats into part of every good in the hold. Deliberately rare and
@@ -850,7 +983,8 @@ func resolve_pirate_encounter(choice: String) -> Dictionary:
 	return result
 
 func _end_game() -> void:
-	is_traveling = false
+	for p in players:
+		p.is_traveling = false
 	var summary := {
 		"days": game_length_days,
 		"final_gold": gold,
@@ -858,5 +992,6 @@ func _end_game() -> void:
 		"loan": loan,
 		"savings": savings,
 		"net_worth": get_net_worth(),
+		"standings": get_standings(),
 	}
 	game_ended.emit(summary)
