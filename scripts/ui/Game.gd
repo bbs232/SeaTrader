@@ -584,6 +584,14 @@ func _open_quantity_dialog(current: int, on_set: Callable, title_key: String = "
 	# Requests the OS's numeric keypad instead of a full letter keyboard on
 	# mobile/tablet -- this field only ever holds digits.
 	edit.virtual_keyboard_type = LineEdit.KEYBOARD_TYPE_NUMBER
+	if DisplayServer.is_touchscreen_available():
+		# select_all_on_focus is unreliable together with the web export's
+		# virtual keyboard (Godot issue #106536): the selection shows, but
+		# typing appends after the old digits instead of replacing them
+		# (e.g. typing "500" over a pre-filled "1" can yield "1500"). Clearing
+		# the field outright on focus sidesteps that -- the player always
+		# types the full new value into an empty field.
+		edit.focus_entered.connect(func(): edit.clear())
 	UIUtil.wire_live_gold_formatting(edit)
 	vbox.add_child(edit)
 
