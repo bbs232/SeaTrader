@@ -853,12 +853,17 @@ func _open_bank_panel() -> void:
 	var info_label := UIUtil.make_label("", 18)
 	vbox.add_child(info_label)
 
-	var amount := SpinBox.new()
-	amount.min_value = 1
-	amount.max_value = 999999
-	amount.value = 100
-	amount.step = 1
-	vbox.add_child(amount)
+	# A box, not a plain int, so the nested button callbacks below all read
+	# the same live amount regardless of GDScript lambda capture semantics.
+	var amount_box: Array = [100]
+	var btn_amount := UIUtil.make_button(UIUtil.format_gold(amount_box[0]))
+	btn_amount.pressed.connect(func():
+		_open_quantity_dialog(amount_box[0], func(new_amount: int):
+			amount_box[0] = new_amount
+			btn_amount.text = UIUtil.format_gold(new_amount)
+		)
+	)
+	vbox.add_child(btn_amount)
 
 	var grid := GridContainer.new()
 	grid.columns = 2
@@ -906,7 +911,7 @@ func _open_bank_panel() -> void:
 	refresh_info.call()
 
 	btn_deposit.pressed.connect(func():
-		GameState.bank_deposit(int(amount.value))
+		GameState.bank_deposit(amount_box[0])
 		refresh_info.call()
 	)
 	btn_deposit_max.pressed.connect(func():
@@ -914,7 +919,7 @@ func _open_bank_panel() -> void:
 		refresh_info.call()
 	)
 	btn_withdraw.pressed.connect(func():
-		GameState.bank_withdraw(int(amount.value))
+		GameState.bank_withdraw(amount_box[0])
 		refresh_info.call()
 	)
 	btn_withdraw_max.pressed.connect(func():
@@ -922,7 +927,7 @@ func _open_bank_panel() -> void:
 		refresh_info.call()
 	)
 	btn_borrow.pressed.connect(func():
-		GameState.bank_borrow(int(amount.value))
+		GameState.bank_borrow(amount_box[0])
 		refresh_info.call()
 	)
 	btn_borrow_max.pressed.connect(func():
@@ -930,7 +935,7 @@ func _open_bank_panel() -> void:
 		refresh_info.call()
 	)
 	btn_repay.pressed.connect(func():
-		GameState.bank_repay(int(amount.value))
+		GameState.bank_repay(amount_box[0])
 		refresh_info.call()
 	)
 	btn_repay_max.pressed.connect(func():

@@ -11,7 +11,7 @@ signal mega_capacity_gift_granted(bonus: int)
 signal billionaire_gift_granted(security_ships_granted: int)
 
 ## Bumped by one on every gameplay/UI update shipped, shown in the main menu footer.
-const GAME_VERSION := "4.2"
+const GAME_VERSION := "4.3"
 
 const STARTING_GOLD := 500
 const STARTING_CAPACITY := 85
