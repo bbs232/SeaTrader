@@ -581,6 +581,9 @@ func _open_quantity_dialog(current: int, on_set: Callable, title_key: String = "
 	edit.custom_minimum_size = Vector2(0, 48)
 	edit.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
 	edit.select_all_on_focus = true
+	# Requests the OS's numeric keypad instead of a full letter keyboard on
+	# mobile/tablet -- this field only ever holds digits.
+	edit.virtual_keyboard_type = LineEdit.KEYBOARD_TYPE_NUMBER
 	UIUtil.wire_live_gold_formatting(edit)
 	vbox.add_child(edit)
 
