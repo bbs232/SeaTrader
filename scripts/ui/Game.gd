@@ -604,7 +604,16 @@ func _open_quantity_dialog(current: int, on_set: Callable, title_key: String = "
 	btn_cancel2.pressed.connect(func(): dim.queue_free())
 	vbox.add_child(btn_cancel2)
 
-	edit.call_deferred("grab_focus")
+	# Auto-focusing here is only safe on desktop: browsers only pop the OS
+	# on-screen keyboard for a text field when it's focused synchronously
+	# within the user's own tap. A deferred grab_focus() lands a frame after
+	# the tap that opened this dialog, so on touchscreens it silently focuses
+	# the field with no keyboard behind it -- the player sees a caret but has
+	# nothing to type with, and the pre-filled number never changes. On
+	# touchscreens, leave it unfocused; tapping the field directly (like the
+	# player-name fields elsewhere) is what triggers the real keyboard.
+	if not DisplayServer.is_touchscreen_available():
+		edit.call_deferred("grab_focus")
 
 ## Confirms a purchase before it happens, surfacing the overload warning
 ## up front (in the confirmation itself) whenever this purchase would push
