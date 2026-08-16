@@ -476,6 +476,30 @@ func _initialize() -> void:
 	SaveManager.delete_save()
 	print("billionaire gift OK")
 
+	# Wealth-cap victory: a joke instant-win the moment net worth ever reaches
+	# NET_WORTH_VICTORY_CAP -- unlike the gift milestones above, this actually
+	# ends the game (game_ended fires) rather than just handing out a bonus.
+	GameState.new_game(21, "jaffa")
+	var ended_fired := [0]
+	var ended_summary := [{}]
+	GameState.game_ended.connect(func(summary: Dictionary): ended_fired[0] += 1; ended_summary[0] = summary)
+	GameState.gold = GameState.NET_WORTH_VICTORY_CAP - 1
+	assert(ended_fired[0] == 0)
+	assert(not GameState.net_worth_victory)
+	GameState.gold = GameState.NET_WORTH_VICTORY_CAP
+	assert(ended_fired[0] == 1)
+	assert(GameState.net_worth_victory)
+	assert(GameState.net_worth_victory_player_name == GameState.players[0].player_name)
+	assert(int(ended_summary[0]["net_worth"]) >= GameState.NET_WORTH_VICTORY_CAP)
+	GameState.gold += 500 # already ended -- must not refire
+	assert(ended_fired[0] == 1)
+	# A fresh game must clear the flag, or every subsequent game would start
+	# already "won".
+	GameState.new_game(21, "jaffa")
+	assert(not GameState.net_worth_victory)
+	assert(GameState.net_worth_victory_player_name == "")
+	print("wealth-cap victory OK")
+
 	# Save/Load round trip
 	SaveManager.save_game()
 	assert(SaveManager.has_save())

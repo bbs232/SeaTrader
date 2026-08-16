@@ -19,6 +19,8 @@ func _initialize() -> void:
 	GameState.current_day = 2 # force past game_length so EndGame reads a finished run
 	_test_scene("res://scenes/EndGame.tscn")
 
+	_test_wealth_victory_banner()
+
 	await _test_multiplayer_screens()
 
 	print("=== ALL UI SMOKE TESTS PASSED ===")
@@ -260,3 +262,26 @@ func _test_scene(path: String) -> void:
 	root.add_child(instance)
 	print("instantiated OK: %s (children=%d)" % [path, instance.get_child_count()])
 	instance.queue_free()
+
+## EndGame's wealth-victory banner (see GameState._check_net_worth_victory)
+## only renders when net_worth_victory is set, which the plain "force past
+## game_length" setup above never exercises -- so this drives that flag
+## directly for both the solo and multiplayer EndGame layouts, catching a
+## bad tr() key or format-string mismatch in _build_wealth_victory_banner
+## that a normal playtest of a merely-finished game would never hit.
+func _test_wealth_victory_banner() -> void:
+	GameState.new_game(1, "jaffa")
+	GameState.current_day = 2
+	GameState.net_worth_victory = true
+	GameState.net_worth_victory_player_name = ""
+	_test_scene("res://scenes/EndGame.tscn")
+
+	GameState.new_multiplayer_game(1, ["Alice", "Bob"], "jaffa")
+	GameState.current_day = 2
+	GameState.net_worth_victory = true
+	GameState.net_worth_victory_player_name = "Alice"
+	_test_scene("res://scenes/EndGame.tscn")
+
+	GameState.net_worth_victory = false
+	GameState.net_worth_victory_player_name = ""
+	print("wealth victory banner OK")

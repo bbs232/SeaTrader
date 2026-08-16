@@ -25,6 +25,9 @@ func _build_ui() -> void:
 	vbox.add_theme_constant_override("separation", 12)
 	panel.add_child(vbox)
 
+	if GameState.net_worth_victory:
+		_build_wealth_victory_banner(vbox)
+
 	if GameState.is_multiplayer():
 		_build_multiplayer_results(vbox)
 	else:
@@ -33,6 +36,19 @@ func _build_ui() -> void:
 	var btn_menu := UIUtil.make_button(tr("endgame_to_menu"))
 	btn_menu.pressed.connect(func(): get_tree().change_scene_to_file("res://scenes/MainMenu.tscn"))
 	vbox.add_child(btn_menu)
+
+## Shown above the normal results when the game ended early because someone's
+## net worth crossed NET_WORTH_VICTORY_CAP (a joke instant-win), rather than
+## by running out of days. Widens the label past the panel's normal 420px
+## (same AUTOWRAP_WORD trick as _show_message's long gift-milestone text) so
+## the humorous paragraph wraps readably instead of running off-screen.
+func _build_wealth_victory_banner(vbox: VBoxContainer) -> void:
+	vbox.add_child(UIUtil.make_title(tr("endgame_wealth_victory_title"), 28))
+	var message_key := "endgame_wealth_victory_message_solo" if not GameState.is_multiplayer() else "endgame_wealth_victory_message_multi"
+	var label := UIUtil.make_label(tr(message_key), 17)
+	label.autowrap_mode = TextServer.AUTOWRAP_WORD
+	label.custom_minimum_size = Vector2(560, 0)
+	vbox.add_child(label)
 
 func _build_solo_results(vbox: VBoxContainer) -> void:
 	vbox.add_child(UIUtil.make_title(tr("endgame_title"), 32))

@@ -11,7 +11,7 @@ signal mega_capacity_gift_granted(bonus: int)
 signal billionaire_gift_granted(security_ships_granted: int)
 
 ## Bumped by one on every gameplay/UI update shipped, shown in the main menu footer.
-const GAME_VERSION := "4.6"
+const GAME_VERSION := "4.7"
 
 const STARTING_GOLD := 500
 const STARTING_CAPACITY := 85
@@ -51,6 +51,7 @@ const MEGA_CAPACITY_GIFT_GOLD_STEP := 100_000_000 # each new multiple of gold re
 const MEGA_CAPACITY_GIFT_CAPACITY_BONUS := 10_000_000 # flat cargo-hold increase granted unconditionally, no cost, per MEGA_CAPACITY_GIFT_GOLD_STEP reached
 const BILLIONAIRE_GIFT_GOLD_THRESHOLD := 1_000_000_000 # one-time free security-ship gift once gold ever reaches this -- same one-shot pattern as MILLIONAIRE_GIFT_GOLD_THRESHOLD, just a much bigger milestone
 const BILLIONAIRE_GIFT_SECURITY_SHIPS := 3 # flat escort-ship count granted unconditionally, no cost, on top of however many the player already has
+const NET_WORTH_VICTORY_CAP := 1_000_000_000_000 # a joke instant-win ceiling: the moment ANY player's net worth ever reaches this, the whole session ends immediately regardless of days remaining
 
 var goods: Array[Good] = []
 var ports: Array[Port] = []
@@ -72,6 +73,16 @@ var players: Array[PlayerState] = []
 var player_count: int = 1
 var current_player_index: int = 0
 
+## Whether NET_WORTH_VICTORY_CAP has already ended this session -- global, not
+## per-player, since it's whoever crosses it first that ends the game for
+## everyone. net_worth_victory_player_name is captured at the moment it fires
+## (see _check_net_worth_victory) so EndGame.gd can name the player even after
+## current_player_index has moved on. Neither is persisted across save/load:
+## a saved game can never already be past this point, the same way
+## pending_encounter and capacity_offer_pending_steps aren't either.
+var net_worth_victory: bool = false
+var net_worth_victory_player_name: String = ""
+
 var gold: int:
 	get: return players[current_player_index].gold
 	set(value):
@@ -80,6 +91,7 @@ var gold: int:
 		_check_capacity_offer()
 		_check_mega_capacity_gift()
 		_check_billionaire_gift()
+		_check_net_worth_victory()
 var current_port_id: String:
 	get: return players[current_player_index].current_port_id
 	set(value): players[current_player_index].current_port_id = value
@@ -104,9 +116,16 @@ var owned_upgrades: Array[String]:
 var loan: float:
 	get: return players[current_player_index].loan
 	set(value): players[current_player_index].loan = value
+## Only savings, not loan, needs its own net-worth-victory check: every bank
+## action that moves loan also moves gold by the same amount in the opposite
+## direction (borrow: both up; repay: both down), so net worth never changes
+## from loan alone -- interest is the one case where savings can grow without
+## a matching gold change (see _apply_daily_interest).
 var savings: float:
 	get: return players[current_player_index].savings
-	set(value): players[current_player_index].savings = value
+	set(value):
+		players[current_player_index].savings = value
+		_check_net_worth_victory()
 ## Highest CAPACITY_OFFER_GOLD_STEP multiple already surfaced as a special
 ## offer (see _check_capacity_offer), so each milestone only prompts once.
 var capacity_offer_milestone: int:
@@ -275,6 +294,9 @@ func new_multiplayer_game(game_length: int, player_names: Array, start_port_id: 
 		players.append(_make_player(String(n), start_port_id))
 	player_count = players.size()
 	current_player_index = 0
+	net_worth_victory = false
+	net_worth_victory_player_name = ""
+	_game_ended_emitted = false
 	_init_prices()
 
 func _make_player(player_name: String, start_port_id: String) -> PlayerState:
@@ -793,6 +815,19 @@ func _check_billionaire_gift() -> void:
 	security_ships += BILLIONAIRE_GIFT_SECURITY_SHIPS
 	billionaire_gift_granted.emit(BILLIONAIRE_GIFT_SECURITY_SHIPS)
 
+## Joke instant-win: the moment any player's net worth ever reaches
+## NET_WORTH_VICTORY_CAP, the whole session ends right there -- unlike the
+## gold-only gift milestones above, this is a one-shot game-ending event, not
+## a repeatable bonus, so it's guarded globally (net_worth_victory) rather
+## than per-player. Checked on every gold/savings change (see those setters),
+## same trigger pattern as the gift milestones.
+func _check_net_worth_victory() -> void:
+	if net_worth_victory or get_net_worth() < NET_WORTH_VICTORY_CAP:
+		return
+	net_worth_victory = true
+	net_worth_victory_player_name = players[current_player_index].player_name
+	_end_game()
+
 func _roll_travel_event() -> void:
 	var from_port := get_port(current_port_id)
 	var to_port := get_port(travel_destination_id)
@@ -982,7 +1017,16 @@ func resolve_pirate_encounter(choice: String) -> Dictionary:
 	_advance_travel()
 	return result
 
+## Guards against emitting game_ended twice -- normally impossible since
+## current_day only crosses game_length_days once, but the net-worth-victory
+## check (see _check_net_worth_victory) can in principle land on the exact
+## same tick as a day-limit finish, so this keeps _end_game() idempotent.
+var _game_ended_emitted: bool = false
+
 func _end_game() -> void:
+	if _game_ended_emitted:
+		return
+	_game_ended_emitted = true
 	for p in players:
 		p.is_traveling = false
 	var summary := {
